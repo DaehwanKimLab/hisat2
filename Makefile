@@ -452,7 +452,7 @@ hisat2-quant-bin: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
 	$(INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
+	$(SHARED_CPPS) $(HISAT2_QUANT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
 hisat2-quant-bin-debug: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
@@ -460,7 +460,7 @@ hisat2-quant-bin-debug: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
 	$(INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
+	$(SHARED_CPPS) $(HISAT2_QUANT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
 

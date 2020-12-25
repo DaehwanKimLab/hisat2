@@ -42,7 +42,7 @@ while (-f $prog && -l $prog){
 }
 
 ($vol,$script_path,$prog) 
-                = File::Spec->splitpath($prog);
+    = File::Spec->splitpath($prog);
 my $os_is_nix   = ($^O eq "linux") || ($^O eq "darwin");
 my $quant_bin = $os_is_nix ? 'hisat2-quant-bin' : 'hisat2-quant-bin.exe'; 
 my $quant_prog = File::Spec->catpath($vol,$script_path,$quant_bin);
@@ -51,38 +51,21 @@ my %signo       = ();
 my @signame     = ();
 
 {
-	# Get signal info
-	use Config;
-	my $i = 0;
-	for my $name (split(' ', $Config{sig_name})) {
-		$signo{$name} = $i;
-		$signame[$i] = $name;
-		$i++;
-	}
+    # Get signal info
+    use Config;
+    my $i = 0;
+    for my $name (split(' ', $Config{sig_name})) {
+	$signo{$name} = $i;
+	$signame[$i] = $name;
+	$i++;
+    }
 }
 
 (-x "$quant_prog") ||
 	Fail("Expected hisat2-quant to be in same directory with hisat2-quant-bin:\n$script_path\n");
 
-# Get description of arguments from HISAT2-quant so that we can distinguish HISAT2-quant
-# args from wrapper args
-sub getHt2Desc($) {
-	my $d = shift;
-	my $cmd = "'$quant_prog' --wrapper basic-0 --arg-desc";
-	open(my $fh, "$cmd |") || Fail("Failed to run command '$cmd'\n");
-	while(readline $fh) {
-		chomp;
-		next if /^\s*$/;
-		my @ts = split(/\t/);
-		$d->{$ts[0]} = $ts[1];
-	}
-	close($fh);
-	$? == 0 || Fail("Description of arguments failed!\n");
-}
-
 my %desc = ();
 my %wrapped = ("1" => 1, "2" => 1);
-getHt2Desc(\%desc);
 
 # Given an option like -1, determine whether it's wrapped (i.e. should be
 # handled by this script rather than being passed along to HISAT)
@@ -91,111 +74,89 @@ sub isWrapped($) { return defined($wrapped{$_[0]}); }
 my @orig_argv = @ARGV;
 
 my @ht2w_args = (); # options for wrapper
-my @ht2_args  = (); # options for HISAT
+my @ht2_args  = (); # options for hisat2-quant
 my $saw_dd = 0;
 for(0..$#ARGV) {
-	if($ARGV[$_] eq "--") {
-		$saw_dd = 1;
-		next;
-	}
-	push @ht2w_args, $ARGV[$_] if !$saw_dd;
-	push @ht2_args,  $ARGV[$_] if  $saw_dd;
+    if($ARGV[$_] eq "--") {
+	$saw_dd = 1;
+	next;
+    }
+    push @ht2w_args, $ARGV[$_] if !$saw_dd;
+    push @ht2_args,  $ARGV[$_] if  $saw_dd;
 }
 if(!$saw_dd) {
-	@ht2_args = @ht2w_args;
-	@ht2w_args= ();
+    @ht2_args = @ht2w_args;
+    @ht2w_args= ();
 }
 
 my $debug = 0;
 my %read_fns = ();
 my %read_compress = ();
 my $cap_out = undef;       # Filename for passthrough
-my $no_unal = 0;
-my $large_idx = 0;
 # Remove whitespace
 for my $i (0..$#ht2_args) {
-	$ht2_args[$i]=~ s/^\s+//; $ht2_args[$i] =~ s/\s+$//;
+    $ht2_args[$i]=~ s/^\s+//; $ht2_args[$i] =~ s/\s+$//;
 }
 
 # We've handled arguments that the user has explicitly directed either to the
-# wrapper or to hisat, now we capture some of the hisat arguments that
+# wrapper or to hisat2-quant, now we capture some of the hisat2-quant arguments that
 # ought to be handled in the wrapper
 for(my $i = 0; $i < scalar(@ht2_args); $i++) {
-	next unless defined($ht2_args[$i]);
-	my $arg = $ht2_args[$i];
-	my @args = split(/=/, $arg);
-	if(scalar(@args) > 2) {
-		$args[1] = join("=", @args[1..$#args]);
+    next unless defined($ht2_args[$i]);
+    my $arg = $ht2_args[$i];
+    my @args = split(/=/, $arg);
+    if(scalar(@args) > 2) {
+	$args[1] = join("=", @args[1..$#args]);
+    }
+    $arg = $args[0];
+    if($arg eq "-b" || $arg eq "--bam") {
+	$ht2_args[$i] = undef;
+	$arg =~ s/^-b//; $arg =~ s/^--bam//;
+	if($arg ne "") {
+	    # Argument was part of this token
+	    my @args = split(/,/, $arg);
+	    for my $a (@args) { push @ht2w_args, ("-b", $a); }
+	} else {
+	    # Argument is in the next token
+	    $i < scalar(@ht2_args)-1 || Fail("Argument expected in next token!\n");
+	    $i++;
+	    my @args = split(/,/, $ht2_args[$i]);
+	    for my $a (@args) { push @ht2w_args, ("-b", $a); }
+	    $ht2_args[$i] = undef;
 	}
-	$arg = $args[0];
-	if($arg eq "-U" || $arg eq "--unpaired") {
-		$ht2_args[$i] = undef;
-		$arg =~ s/^-U//; $arg =~ s/^--unpaired//;
-		if($arg ne "") {
-			# Argument was part of this token
-			my @args = split(/,/, $arg);
-			for my $a (@args) { push @ht2w_args, ("-U", $a); }
-		} else {
-			# Argument is in the next token
-			$i < scalar(@ht2_args)-1 || Fail("Argument expected in next token!\n");
-			$i++;
-			my @args = split(/,/, $ht2_args[$i]);
-			for my $a (@args) { push @ht2w_args, ("-U", $a); }
-			$ht2_args[$i] = undef;
-		}
-	}
-	if($arg eq "--debug") {
-		$debug = 1;
-		$ht2_args[$i] = undef;
-	}
-	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
-		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
-			$ht2_args[$i] = undef;
-			if(scalar(@args) > 1 && $args[1] ne "") {
-				$read_fns{$rarg} = $args[1];
-			} else {
-				$i < scalar(@ht2_args)-1 || Fail("--${rarg}* option takes an argument.\n");
-				$read_fns{$rarg} = $ht2_args[$i+1];
-				$ht2_args[$i+1] = undef;
-			}
-			$read_compress{$rarg} = "";
-			$read_compress{$rarg} = "gzip"  if $arg eq "--${rarg}-gz";
-			$read_compress{$rarg} = "bzip2" if $arg eq "--${rarg}-bz2";
-			last;
-		}
-	}
+    }
+    if($arg eq "--debug") {
+	$debug = 1;
+	$ht2_args[$i] = undef;
+    }
 }
 # If the user asked us to redirect some reads to files, or to suppress
 # unaligned reads, then we need to capture the output from HISAT and pass it
 # through this wrapper.
 my $passthru = 0;
-if(scalar(keys %read_fns) > 0 || $no_unal) {
-	$passthru = 1;
-	push @ht2_args, "--passthrough";
-	$cap_out = "-";
-	for(my $i = 0; $i < scalar(@ht2_args); $i++) {
-		next unless defined($ht2_args[$i]);
-		my $arg = $ht2_args[$i];
-		if($arg eq "-S" || $arg eq "--output") {
-			$i < scalar(@ht2_args)-1 || Fail("-S/--output takes an argument.\n");
-			$cap_out = $ht2_args[$i+1];
-			$ht2_args[$i] = undef;
-			$ht2_args[$i+1] = undef;
-		}
+if(scalar(keys %read_fns) > 0) {
+    $passthru = 1;
+    push @ht2_args, "--passthrough";
+    $cap_out = "-";
+    for(my $i = 0; $i < scalar(@ht2_args); $i++) {
+	next unless defined($ht2_args[$i]);
+	my $arg = $ht2_args[$i];
+	if($arg eq "-S" || $arg eq "--output") {
+	    $i < scalar(@ht2_args)-1 || Fail("-S/--output takes an argument.\n");
+	    $cap_out = $ht2_args[$i+1];
+	    $ht2_args[$i] = undef;
+	    $ht2_args[$i+1] = undef;
 	}
+    }
 }
 my @tmp = ();
 for (@ht2_args) { push(@tmp, $_) if defined($_); }
 @ht2_args = @tmp;
 
-my @unps = ();
-my @mate1s = ();
-my @mate2s = ();
+my @bams = ();
 my @to_delete = ();
 my @to_kills = ();
 my $temp_dir = "/tmp";
-my $bam_out = 0;
-my $ref_str = undef;
 my $no_pipes = 0;
 my $keep = 0;
 my $verbose = 0;
@@ -210,16 +171,13 @@ my @old_ARGV = @ARGV;
 @ARGV = @ht2w_args_cp;
 
 GetOptions(
-	"1=s"                           => \@mate1s,
-	"2=s"                           => \@mate2s,
-	"reads|U=s"                     => \@unps,
-	"temp-directory=s"              => \$temp_dir,
-	"bam"                           => \$bam_out,
-	"no-named-pipes"                => \$no_pipes,
-	"keep"                          => \$keep,
-	"verbose"                       => \$verbose,
-	"log-file=s"                    => \$log_fName,
-	"help|h"                        => \$help
+    "bam|b=s"                       => \@bams,
+    "temp-directory=s"              => \$temp_dir,
+    "no-named-pipes"                => \$no_pipes,
+    "keep"                          => \$keep,
+    "verbose"                       => \$verbose,
+    "log-file=s"                    => \$log_fName,
+    "help|h"                        => \$help
 );
 
 @ARGV = @old_ARGV;
@@ -237,43 +195,39 @@ Info("  Binary args:\n[ @ht2_args ]\n");
 
 # check read lengths
 # if read_files have more than 1 files, use first one,
-my @read_files = (scalar(@unps) > 0) ? @unps : @mate1s;
 
-sub check_file_exist($$$) {
-	my ($unps, $mate1s, $mate2s) = @_;
-	for my $fn (@$unps, @$mate1s, @$mate2s) {
-		if (not -f $fn) {
-			Fail("Read file '%s' doesn't exist\n", $fn);
-			return 1;
-		}
+sub check_file_exist {
+    my @bams = @_;
+    for my $fn (@bams) {
+	if (not -f $fn) {
+	    Fail("Read file '%s' doesn't exist\n", $fn);
+	    return 1;
 	}
-	return 0;
+    }
+    return 0;
 }
 
 sub cat_file($$) {
-	my ($ifn, $ofh) = @_;
-	my $ifh = undef;
-	if($ifn =~ /\.gz$/) {
-		open($ifh, "gzip -dc $ifn |") ||
-			 Fail("Could not open gzipped read file: $ifn \n");
-	} elsif($ifn =~ /\.bz2/) {
-		open($ifh, "bzip2 -dc $ifn |") ||
-			Fail("Could not open bzip2ed read file: $ifn \n");
-	} else {
-		open($ifh, $ifn) || Fail("Could not open read file: $ifn \n");
-	}
-	while(readline $ifh) { print {$ofh} $_; }
-	close($ifh);
+    my ($ifn, $ofh) = @_;
+    my $ifh = undef;
+    if($ifn =~ /\.bam$/) {
+	open($ifh, "samtools view $ifn |") ||
+	    Fail("Could not open gzipped read file: $ifn \n");
+    } else {
+	open($ifh, $ifn) || Fail("Could not open read file: $ifn \n");
+    }
+    while(readline $ifh) { print {$ofh} $_; }
+    close($ifh);
 }
 
 # Return non-zero if and only if the input should be wrapped (i.e. because
 # it's compressed).
-sub wrapInput($$$) {
-	my ($unps, $mate1s, $mate2s) = @_;
-	for my $fn (@$unps, @$mate1s, @$mate2s) {
-		return 1 if $fn =~ /\.gz$/ || $fn =~ /\.bz2$/;
-	}
-	return 0;
+sub wrapInput {
+    my @bams = @_;
+    for my $fn (@bams) {
+	return 1 if $fn =~ /\.bam$/;
+    }
+    return 0;
 }
 
 sub Info {
@@ -294,17 +248,17 @@ sub Fail {
 }
 
 if($seq_in_args == 0) {
-    check_file_exist(\@unps, \@mate1s, \@mate2s);
+    check_file_exist(@bams);
 }
 
-if(scalar(@unps) > 0) {
+if(wrapInput(@bams) > 0) {
     #
     # Wrap unpaired inputs.
     #
     # Make a named pipe for delivering unpaired reads
     my $ufn = "$temp_dir/$$.unp";
     push @to_delete, $ufn;
-    push @ht2_args, "-U $ufn";
+    push @ht2_args, "$ufn";
     # Create named pipe 2 for writing
     if(!$no_pipes) {
 	mkfifo($ufn, 0700) || Fail("mkfifo($ufn) failed.\n");
@@ -314,19 +268,14 @@ if(scalar(@unps) > 0) {
     if($pid == 0) {
 	# Open named pipe 2 for writing
 	open(my $ofh, ">$ufn") || Fail("Can't open '$ufn' for writing.\n");
-	for my $ifn (@unps) { cat_file($ifn, $ofh); }
+	for my $ifn (@bams) { cat_file($ifn, $ofh); }
 	close($ofh);
 	exit 0 unless $no_pipes;
     }
 }
 else {
-    if(scalar(@mate2s) > 0) {
-	# Just pass all the mate arguments along to the binary
-	push @ht2_args, ("-1", join(",", @mate1s));
-	push @ht2_args, ("-2", join(",", @mate2s));
-    }
-    if(scalar(@unps) > 0) {
-	push @ht2_args, ("-U", join(",", @unps));
+    if(scalar(@bams) > 0) {
+	push @ht2_args, (join(",", @bams));
     }
 }
 
@@ -336,7 +285,7 @@ Info("  Binary args:\n[ @ht2_args ]\n");
 my $debug_str = ($debug ? "-debug" : "");
 
 # Construct command invoking hisat2-quant
-my $cmd = "'$quant_prog$debug_str' --wrapper basic-0 ".join(" ", @ht2_args);
+my $cmd = "'$quant_prog$debug_str' ".join(" ", @ht2_args);
 
 # Possibly add read input on an anonymous pipe
 $cmd = "$readpipe $cmd" if defined($readpipe);
