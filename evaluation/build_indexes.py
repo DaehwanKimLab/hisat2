@@ -41,8 +41,9 @@ def build_indexes(input_aligners,
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --ss ../../data/%s.ss --exon ../../data/%s.exon %s_tran" % (genome, genome, genome, genome)
                 cmd = cmd + "; ../../aligners/bin/hisat2-build -p 4 ../../data/%s.fa --snp ../../data/%s.snp --haplotype ../../data/%s.haplotype --ss ../../data/%s.ss --exon ../../data/%s.exon %s_snp_tran" % (genome, genome, genome, genome, genome, genome)
             elif aligner == "hisat-gt":
-                cmd = "../../aligners/bin/hisat2_extract_transcript_graph.py -g ../../data/%s.gtf -r ../../data/%s.fa --chrtome -o ../../data/%s" % (genome, genome, genome)
+                cmd = "../../aligners/bin/hisat2_extract_transcript_graph.py -g ../../data/{genome}.gtf -r ../../data/{genome}.fa -s ../../data/{genome}.snp --chrtome -o ../../data/{genome}".format(genome=genome)
                 cmd = cmd + ";../../aligners/bin/hisat2-build -p 4 ../../data/%s.gt.fa --ss ../../data/%s.gt.ss %s.gt" % (genome, genome, genome)
+                cmd = cmd + ";../../aligners/bin/hisat2-build -p 4 ../../data/{genome}.gt.fa --ss ../../data/{genome}.gt.ss --snp ../../data/{genome}.gt.snp {genome}_snp.gt".format(genome=genome)
             elif aligner == "hisat":
                 cmd = "../../aligners/bin/hisat-build ../../data/%s.fa %s" % (genome, genome)
                 cmd = cmd + "; ../../aligners/bin/tophat -G ../../data/%s.gtf --transcriptome-index=gtf %s; rm -rf tophat_out" % (genome, genome)
