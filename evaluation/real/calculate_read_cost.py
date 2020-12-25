@@ -1209,9 +1209,9 @@ def calculate_read_cost(single_end,
                 # "--rna-strandness",
                 # "FR",
                 if version:
-                    index_cmd = "%s/HISAT2_%s%s/" % (index_base, version, index_add) + genome
+                    index_cmd = "%s/hisat2_%s%s/" % (index_base, version, index_add) + genome
                 else:
-                    index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
+                    index_cmd = "%s/hisat2%s/" % (index_base, index_add) + genome
                 if index_type:
                     index_cmd += ("_" + index_type)
                 cmd += [index_cmd]
@@ -1237,9 +1237,9 @@ def calculate_read_cost(single_end,
                     cmd += options.split(' ')
 
                 if version:
-                    index_cmd = "%s/HISAT-GT_%s%s/" % (index_base, version, index_add) + genome
+                    index_cmd = "%s/hisat-gt_%s%s/" % (index_base, version, index_add) + genome
                 else:
-                    index_cmd = "%s/HISAT-GT%s/" % (index_base, index_add) + genome
+                    index_cmd = "%s/hisat-gt%s/" % (index_base, index_add) + genome
                 if index_type:
                     index_cmd += ("_" + index_type)
 
@@ -1285,7 +1285,7 @@ def calculate_read_cost(single_end,
                 # "../splicesites.txt",
                 # "--rna-strandness",
                 # "FR",
-                cmd += ["%s/HISAT%s/" % (index_base, index_add) + genome]
+                cmd += ["%s/hisat%s/" % (index_base, index_add) + genome]
                 if paired:
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
@@ -1299,7 +1299,7 @@ def calculate_read_cost(single_end,
                 cmd += ["--no-sort-bam"]
                 cmd += ["--read-realign-edit-dist", "0"]
                 cmd += ["--keep-tmp",
-                        "%s/HISAT%s/" % (index_base, index_add) + genome,
+                        "%s/hisat%s/" % (index_base, index_add) + genome,
                         read1_fname]
                 if paired:
                     cmd += [read2_fname]
@@ -1310,7 +1310,7 @@ def calculate_read_cost(single_end,
                 if type == "x2" and cmd_idx == 1:
                     cmd += ["--genomeDir", "."]
                 else:
-                    cmd += ["--genomeDir", "%s/STAR%s" % (index_base, index_add)]
+                    cmd += ["--genomeDir", "%s/star%s" % (index_base, index_add)]
                 if desktop:
                     cmd += ["--genomeLoad", "NoSharedMemory"]
                 else:
@@ -1339,7 +1339,7 @@ def calculate_read_cost(single_end,
                 cmd += ["-n", "3"]
                 if paired:
                     cmd += ["-X", "500"]
-                cmd += ["%s/Bowtie%s/" % (index_base, index_add) + genome]
+                cmd += ["%s/bowtie%s/" % (index_base, index_add) + genome]
                 if paired:
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
@@ -1360,9 +1360,9 @@ def calculate_read_cost(single_end,
                     cmd += options.split(' ')
 
                 if version:
-                    cmd += ["-x %s/Bowtie2_%s%s/" % (index_base, version, index_add) + genome]
+                    cmd += ["-x %s/bowtie2_%s%s/" % (index_base, version, index_add) + genome]
                 else:
-                    cmd += ["-x %s/Bowtie2%s/" % (index_base, index_add) + genome]
+                    cmd += ["-x %s/bowtie2%s/" % (index_base, index_add) + genome]
                 if paired:
                     cmd += ["-1", read1_fname,
                             "-2", read2_fname]
@@ -1375,7 +1375,7 @@ def calculate_read_cost(single_end,
                 if num_threads > 1:
                     cmd += ["-t", str(num_threads)]
                 cmd += ["--max-mismatches=3",
-                        "-D", "%s/GSNAP%s" % (index_base, index_add),
+                        "-D", "%s/gsnap%s" % (index_base, index_add),
                         "-N", "1",
                         "-d", genome,
                         read1_fname]
@@ -1395,9 +1395,9 @@ def calculate_read_cost(single_end,
                 if options:
                     cmd += options.split(' ')
                 if version:
-                    cmd += ["%s/BWA_%s%s/%s.fa" % (index_base, version, index_add, genome)]
+                    cmd += ["%s/bwa_%s%s/%s.fa" % (index_base, version, index_add, genome)]
                 else:
-                    cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
+                    cmd += ["%s/bwa%s/%s.fa" % (index_base, index_add, genome)]
                 cmd += [read1_fname]
                 if paired:
                     cmd += [read2_fname]
@@ -1407,7 +1407,7 @@ def calculate_read_cost(single_end,
                 cmd += ["map"]
                 cmd += ["-t", str(num_threads)]
                 cmd += ["--surject-to", "sam"]
-                index_cmd = "%s/VG%s/" % (index_base, index_add) + genome
+                index_cmd = "%s/vg%s/" % (index_base, index_add) + genome
                 if index_type:
                     index_cmd += ("_" + index_type)
 

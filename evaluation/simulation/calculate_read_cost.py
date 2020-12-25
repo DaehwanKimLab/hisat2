@@ -2219,9 +2219,9 @@ def calculate_read_cost(single_end,
                     # "--rna-strandness",
                     # "FR",
                     if version:
-                        index_cmd = "%s/HISAT2_%s%s/" % (index_base, version, index_add) + genome
+                        index_cmd = "%s/hisat2_%s%s/" % (index_base, version, index_add) + genome
                     else:
-                        index_cmd = "%s/HISAT2%s/" % (index_base, index_add) + genome
+                        index_cmd = "%s/hisat2%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
                     cmd += [index_cmd]
@@ -2254,9 +2254,9 @@ def calculate_read_cost(single_end,
                         cmd += options.split(' ')
                     
                     if version:
-                        index_cmd = "%s/HISAT-GT_%s%s/" % (index_base, version, index_add) + genome
+                        index_cmd = "%s/hisat-gt_%s%s/" % (index_base, version, index_add) + genome
                     else:
-                        index_cmd = "%s/HISAT-GT%s/" % (index_base, index_add) + genome
+                        index_cmd = "%s/hisat-gt%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
 
@@ -2302,7 +2302,7 @@ def calculate_read_cost(single_end,
                     # "../splicesites.txt",
                     # "--rna-strandness",
                     # "FR",
-                    cmd += ["%s/HISAT%s/" % (index_base, index_add) + genome]
+                    cmd += ["%s/hisat%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
@@ -2313,14 +2313,14 @@ def calculate_read_cost(single_end,
                     if num_threads > 1:
                         cmd += ["-p", str(num_threads)]
                     if type.find("gtf") != -1:
-                        cmd += ["--transcriptome-index=%s/HISAT%s/gtf/%s" % (index_base, index_add, genome)]
+                        cmd += ["--transcriptome-index=%s/hisat%s/gtf/%s" % (index_base, index_add, genome)]
                     if type == "gtfonly":
                         cmd += ["--transcriptome-only"]
                     cmd += ["--read-edit-dist", "3"]
                     cmd += ["--no-sort-bam"]
                     cmd += ["--read-realign-edit-dist", "0"]
                     cmd += ["--keep-tmp",
-                            "%s/HISAT%s/" % (index_base, index_add) + genome,
+                            "%s/hisat%s/" % (index_base, index_add) + genome,
                             read1_fname]
                     if paired:
                         cmd += [read2_fname]
@@ -2331,9 +2331,9 @@ def calculate_read_cost(single_end,
                     cmd += ["--genomeDir"]
                     if cmd_idx == 0:
                         if type == "gtf":
-                            cmd += ["%s/STAR%s/gtf" % (index_base, index_add)]
+                            cmd += ["%s/star%s/gtf" % (index_base, index_add)]
                         else:
-                            cmd += ["%s/STAR%s" % (index_base, index_add)]
+                            cmd += ["%s/star%s" % (index_base, index_add)]
                     else:
                         assert cmd_idx == 1
                         cmd += ["."]
@@ -2363,7 +2363,7 @@ def calculate_read_cost(single_end,
                     cmd += ["-n", "3"]
                     if paired:
                         cmd += ["-X", "500"]
-                    cmd += ["%s/Bowtie%s/" % (index_base, index_add) + genome]
+                    cmd += ["%s/bowtie%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
@@ -2380,9 +2380,9 @@ def calculate_read_cost(single_end,
                     if options != "":
                         cmd += options.split(' ')
                     if version:
-                        cmd += ["-x %s/Bowtie2_%s%s/" % (index_base, version, index_add) + genome]
+                        cmd += ["-x %s/bowtie2_%s%s/" % (index_base, version, index_add) + genome]
                     else:
-                        cmd += ["-x %s/Bowtie2%s/" % (index_base, index_add) + genome]
+                        cmd += ["-x %s/bowtie2%s/" % (index_base, index_add) + genome]
                     if paired:
                         cmd += ["-1", read1_fname,
                                 "-2", read2_fname]
@@ -2395,7 +2395,7 @@ def calculate_read_cost(single_end,
                     if num_threads > 1:
                         cmd += ["-t", str(num_threads)]
                     cmd += ["--max-mismatches=3",
-                            "-D", "%s/GSNAP%s" % (index_base, index_add),
+                            "-D", "%s/gsnap%s" % (index_base, index_add),
                             "-N", "1",
                             "-d", genome,
                             read1_fname]
@@ -2417,9 +2417,9 @@ def calculate_read_cost(single_end,
                     # if paired:
                     #    cmd += ["-T", "60"]
                     if version:
-                        cmd += ["%s/BWA_%s%s/%s.fa" % (index_base, version, index_add, genome)]
+                        cmd += ["%s/bwa_%s%s/%s.fa" % (index_base, version, index_add, genome)]
                     else:
-                        cmd += ["%s/BWA%s/%s.fa" % (index_base, index_add, genome)]
+                        cmd += ["%s/bwa%s/%s.fa" % (index_base, index_add, genome)]
                     cmd += [read1_fname]
                     if paired:
                         cmd += [read2_fname]
@@ -2429,7 +2429,7 @@ def calculate_read_cost(single_end,
                     cmd += ["map"]
                     cmd += ["-t", str(num_threads)]
                     cmd += ["--surject-to", "sam"]
-                    index_cmd = "%s/VG%s/" % (index_base, index_add) + genome
+                    index_cmd = "%s/vg%s/" % (index_base, index_add) + genome
                     if index_type:
                         index_cmd += ("_" + index_type)
 
