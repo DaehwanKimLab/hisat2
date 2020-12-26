@@ -25,6 +25,7 @@
 
 import os, sys, math, random, re
 from collections import defaultdict, Counter
+import itertools
 from argparse import ArgumentParser, FileType
 
 
@@ -149,7 +150,10 @@ def read_genome(genome_file):
 
 """
 """
-def read_transcript(genome_seq, gtf_file, frag_len):
+def read_transcript(genome_seq,
+                    gtf_file,
+                    frag_len,
+                    verbose = False):
     genes = defaultdict(list)
     transcripts = {}
 
@@ -170,7 +174,7 @@ def read_transcript(genome_seq, gtf_file, frag_len):
         
         # Zero-based offset
         left, right = int(left) - 1, int(right) - 1
-        if feature != 'exon' or left >= right:
+        if left >= right:
             continue
 
         values_dict = {}
@@ -178,28 +182,43 @@ def read_transcript(genome_seq, gtf_file, frag_len):
             attr, _, val = attr.strip().partition(' ')
             values_dict[attr] = val.strip('"')
 
-        if 'gene_id' not in values_dict or \
-                'transcript_id' not in values_dict:
+        if feature == 'gene':
+            gene_id = values_dict['gene_id']
+            if gene_id in genes:
+                print(gene_id, 'already exists', file=sys.stderr)
+                continue
+
+            gene_biotype = values_dict['gene_biotype']
+            gene_name = values_dict['gene_name']
+            genes[gene_id] = [list(), gene_biotype, gene_name, chrom]
+
+        elif feature == 'exon':
+            transcript_id = values_dict['transcript_id']
+            gene_id = values_dict['gene_id']
+
+            if transcript_id not in transcripts:
+                transcripts[transcript_id] = [chrom, strand, [[left, right]], gene_id]
+                genes[gene_id][0].append(transcript_id)
+            else:
+                transcripts[transcript_id][2].append([left, right])
+        else:
             continue
 
-        gene_id = values_dict['gene_id']
-        transcript_id = values_dict['transcript_id']
-        if transcript_id not in transcripts:
-            transcripts[transcript_id] = [chrom, strand, [[left, right]], gene_id]
-            genes[gene_id].append(transcript_id)
-        else:
-            transcripts[transcript_id][2].append([left, right])
+
+    merged_exon = 0
+    min_transcript_len_filtered = 0
 
     # Sort exons and merge where separating introns are <=5 bps
     for tran, [chr, strand, exons, gene_id] in transcripts.items():
-            exons.sort()
-            tmp_exons = [exons[0]]
-            for i in range(1, len(exons)):
-                if exons[i][0] - tmp_exons[-1][1] <= 5:
-                    tmp_exons[-1][1] = exons[i][1]
-                else:
-                    tmp_exons.append(exons[i])
-            transcripts[tran] = [chr, strand, tmp_exons, gene_id]
+        exons.sort()
+        tmp_exons = [exons[0]]
+        for i in range(1, len(exons)):
+            if exons[i][0] - tmp_exons[-1][1] <= 5:
+                merged_exon += 1
+                tmp_exons[-1][1] = exons[i][1]
+            else:
+                tmp_exons.append(exons[i])
+        transcripts[tran] = [chr, strand, tmp_exons, gene_id]
 
     tmp_transcripts = {}
     for tran, [chr, strand, exons, gene_id] in transcripts.items():
@@ -207,8 +226,26 @@ def read_transcript(genome_seq, gtf_file, frag_len):
         transcript_len = sum(exon_lens)
         if transcript_len >= frag_len:
             tmp_transcripts[tran] = [chr, strand, transcript_len, exons, gene_id]
+        else:
+            min_transcript_len_filtered += 1
 
     transcripts = tmp_transcripts
+
+    if verbose:
+        num_exons = [len(values[3]) for values in transcripts.values()]
+        total_exons = sum(num_exons)
+        avg_exons = total_exons / len(num_exons)
+
+        num_protein_coding = 0
+        for gene in genes.values():
+            if gene[1] == 'protein_coding':
+                num_protein_coding += 1
+
+        assert len(num_exons) == len(transcripts)
+        print("Number of genes: {}, protein_coding_genes: {}".format(len(genes), num_protein_coding))
+        print("Number of transcripts: {}".format(len(transcripts)))
+        print("merged exons: {}, filtered transcripts (minimum length: {}): {}".format(merged_exon, frag_len, min_transcript_len_filtered))
+        print("total exons: {}, average exons: {:.2f}".format(total_exons, avg_exons))
 
     return genes, transcripts
     
@@ -232,6 +269,126 @@ def read_snp(snp_file):
         snps[chr].append([snpID, type, int(pos), data])
 
     return snps
+
+
+"""
+"""
+def find_snp_gene(chr_snp_list, chr_exon_list, snps_list):
+
+    # chr_snp_list and chr_exon_list are sorted by position
+    # for each snp, find gene_id and added to snps_list[gene_id]
+
+    snp_i = 0
+    exon_j = 0
+
+    while snp_i < len(chr_snp_list) and exon_j < len(chr_exon_list):
+
+        # snp position(inclusive)
+        snp_start = chr_snp_list[snp_i][2]
+        snp_end = snp_start
+        snp_type = chr_snp_list[snp_i][1]
+
+        if snp_type == 'deletion':
+            snp_end = snp_start + chr_snp_list[snp_i][3] - 1
+
+        # find gene that includes [snp_start, snp_end] region
+
+        j = exon_j
+        while j < len(chr_exon_list):
+            ex = chr_exon_list[j]
+
+            if snp_end < ex[0]:
+                break
+
+            if ex[0] <= snp_start and snp_end <= ex[1]:
+                gene_id = ex[2]
+                snps_list[gene_id].append(chr_snp_list[snp_i])
+
+            j += 1
+
+        exon_j = j
+        snp_i += 1
+
+    return
+
+
+"""
+"""
+def groupby_gene(genes):
+    chr_genes = dict()
+
+    for k, g in itertools.groupby(genes.items(), key=lambda x : x[1][3]):
+        chr_genes[k] = [ x[0] for x in g ]
+
+    return chr_genes
+
+
+"""
+"""
+def make_gene_snps(genome_snps, genes, super_transcripts):
+    # snps[gene] = [list of snps within the gene]
+    snps = defaultdict(list)
+
+    # Sort SNPs by position
+    for chr in genome_snps:
+        genome_snps[chr].sort(key=lambda x: x[2])
+
+    # Create a temporary list of exons per chromosome
+    chr_exons = defaultdict(list)
+    chr_genes = groupby_gene(genes)
+    for chr, genes in chr_genes.items():
+        for gene_id in genes:
+            if gene_id not in super_transcripts:
+                continue
+            
+            super_transcript = super_transcripts[gene_id]
+            chr_exons[chr] += [[e[0], e[1], gene_id] for e in super_transcript]
+
+    for chr in chr_exons:
+        chr_exons[chr].sort()
+
+    for chr, chr_snps in genome_snps.items():
+        find_snp_gene(chr_snps, chr_exons[chr], snps)
+
+    return snps
+
+
+"""
+"""
+def make_super_transcripts(exons_list):
+    assert len(exons_list) >= 1
+
+    exons_list.sort()
+
+    assert exons_list[0][0] <= exons_list[0][1]
+    cons_exon_list = [exons_list[0]]
+
+    for i in range(1, len(exons_list)):
+        last_exon = cons_exon_list[-1]
+        curr_exon = exons_list[i]
+
+        assert curr_exon[0] <= curr_exon[1]
+
+        def merge_range(A, B):
+            assert A[0] <= B[0]
+            if (A[1] + 1) < B[0]:
+                return None
+
+            return [A[0], max(A[1], B[1])]
+
+        # check two ranges
+        m = merge_range(last_exon, curr_exon)
+        if m is None:
+            cons_exon_list.append([*curr_exon])
+        else:
+            cons_exon_list[-1] = m
+
+    accum_len = 0
+    for e in cons_exon_list:
+        e.append(accum_len)
+        accum_len += e[1] - e[0] + 1
+
+    return cons_exon_list
 
 
 """
@@ -357,7 +514,7 @@ def getSNPs(chr_snps, left, right):
 
 """
 """
-def getSAMAlignmentForDNA(ref_seq, frag_pos, read_len, ref_snps, snp_prob, err_rand_src, max_mismatch):
+def getSAMAlignment(ref_seq, frag_pos, read_len, ref_snps, err_rand_src, max_mismatch):
     # Find the genomic position for frag_pos
     pos, cigars, cigar_descs = frag_pos, [], []
     tmp_read_len = read_len
@@ -369,13 +526,6 @@ def getSAMAlignmentForDNA(ref_seq, frag_pos, read_len, ref_snps, snp_prob, err_r
 
     # Retreive SNPs
     snps = getSNPs(ref_snps, frag_pos, frag_pos + read_len)
-
-    if snp_prob < 1.0 and len(snps) > 0:
-        snps_ = []
-        for snp in snps:
-            if random.random() <= snp_prob:
-                snps_.append(snp)
-        snps = snps_
 
     # Simulate mismatches due to sequencing errors
     mms = []
@@ -560,488 +710,21 @@ def getSAMAlignmentForDNA(ref_seq, frag_pos, read_len, ref_snps, snp_prob, err_r
 
 """
 """
-def getSAMAlignmentForRNA(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch):
-    # Find the genomic position for frag_pos and exon number
-    tmp_frag_pos, tmp_read_len = frag_pos, read_len
-    pos, cigars, cigar_descs = exons[0][0], [], []
-    e_pos = 0
-    prev_e = None
-    for e_i in range(len(exons)):
-        e = exons[e_i]
-        if prev_e:
-            i_len = e[0] - prev_e[1] - 1
-            pos += i_len
-        e_len = e[1] - e[0] + 1
-        if e_len <= tmp_frag_pos:
-            tmp_frag_pos -= e_len
-            pos += e_len
-        else:
-            pos += tmp_frag_pos
-            e_pos = tmp_frag_pos
-            break                        
-        prev_e = e
-
-    # Define Cigar and its descriptions
-    assert e_i < len(exons)
-    e_len = exons[e_i][1] - exons[e_i][0] + 1
-    assert e_pos < e_len
-    cur_pos = pos
-    match_len = 0
-    prev_e = None
-    mismatch, remain_trans_len = 0, len(trans_seq) - (frag_pos + read_len)
-    assert remain_trans_len >= 0
-    for e_i in range(e_i, len(exons)):
-        e = exons[e_i]
-        if prev_e:
-            i_len = e[0] - prev_e[1] - 1
-            cur_pos += i_len
-            cigars.append(("{}N".format(i_len)))
-            cigar_descs.append([])
-        tmp_e_left = e_left = e[0] + e_pos
-        e_pos = 0
-
-        # Retreive SNPs
-        snps = getSNPs(chr_snps, e_left, e[1])
-
-        if snp_prob < 1.0 and len(snps) > 0:
-            snps_ = []
-            for snp in snps:
-                if random.random() <= snp_prob:
-                    snps_.append(snp)
-            snps = snps_
-            
-        # Simulate mismatches due to sequencing errors
-        mms = []
-        for i in range(e_left, min(e[1], e_left + tmp_read_len - 1)):
-            if err_rand_src.getRand() == 1:
-                assert i < len(chr_seq)
-                err_base = "A"
-                #rand = random.randint(0, 2)
-                rand = myrandint(0, 2)
-                if chr_seq[i] == "A":
-                    err_base = "GCT"[rand]
-                elif chr_seq[i] == "C":
-                    err_base = "AGT"[rand]
-                elif chr_seq[i] == "G":
-                    err_base = "ACT"[rand]
-                else:
-                    err_base = "ACG"[rand]                    
-                mms.append(["", "single", i, err_base])
-
-        tmp_diffs = snps + mms
-        tmp_diffs = sorted(tmp_diffs, key=lambda t: t[2])
-        diffs = []
-        if len(tmp_diffs) > 0:
-            diffs = tmp_diffs[:1]
-            for diff in tmp_diffs[1:]:
-                _, tmp_type, tmp_pos, tmp_data = diff
-                _, prev_type, prev_pos, prev_data = diffs[-1]
-                if prev_type == "deletion":
-                    prev_pos += prev_data
-                if tmp_pos <= prev_pos:
-                    continue
-                diffs.append(diff)
-
-        cigar_descs.append([])
-        prev_diff = None
-        for diff in diffs:
-            diff_id, diff_type, diff_pos, diff_data = diff
-            if prev_diff:
-                prev_diff_id, prev_diff_type, prev_diff_pos, prev_diff_data = prev_diff
-                if prev_diff_type == "deletion":
-                    prev_diff_pos += prev_diff_data
-                assert prev_diff_pos < diff_pos
-            diff_pos2 = diff_pos
-            if diff_type == "deletion":
-                diff_pos2 += diff_data
-            if e_left + tmp_read_len - 1 < diff_pos2 or e[1] < diff_pos2:
-                break
-            
-            if diff_type == "single":
-                if mismatch + 1 > max_mismatch:
-                    continue
-                cigar_descs[-1].append([diff_pos - tmp_e_left, diff_data, diff_id])
-                tmp_e_left = diff_pos + 1
-                mismatch += 1
-            elif diff_type == "deletion":
-                del_len = diff_data
-                if mismatch + del_len > max_mismatch:
-                    continue
-                if len(cigars) <= 0 and diff_pos - e_left <= 0:
-                    continue                
-                if remain_trans_len < del_len:
-                    continue
-                remain_trans_len -= del_len
-                if diff_pos - e_left > 0:
-                    cigars.append("{}M".format(diff_pos - e_left))
-                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                    cigar_descs.append([])
-                cigars.append("{}D".format(del_len))
-                cigar_descs[-1].append([0, del_len, diff_id])
-                cigar_descs.append([])
-                tmp_read_len -= (diff_pos - e_left)
-                e_left = tmp_e_left = diff_pos + del_len
-
-            elif diff_type == "insertion":
-                ins_len = len(diff_data)
-                if mismatch + ins_len > max_mismatch:
-                    continue
-                if len(cigars) <= 0 and diff_pos - e_left <= 0:
-                    continue
-                if e_left + tmp_read_len - 1 < diff_pos + ins_len:
-                    break
-                if diff_pos - e_left > 0:
-                    cigars.append("{}M".format(diff_pos - e_left))
-                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                    cigar_descs.append([])
-                cigars.append("{}I".format(ins_len))
-                cigar_descs[-1].append([0, diff_data, diff_id])
-                cigar_descs.append([])
-                tmp_read_len -= (diff_pos - e_left)
-                tmp_read_len -= ins_len
-                e_left = tmp_e_left = diff_pos
-
-            else:
-                assert False
-            prev_diff = diff
-
-        e_right = min(e[1], e_left + tmp_read_len - 1)
-        e_len = e_right - e_left + 1
-        remain_e_len = e_right - tmp_e_left + 1
-        if remain_e_len > 0:
-            cigar_descs[-1].append([remain_e_len, "", ""])
-        if e_len < tmp_read_len:
-            tmp_read_len -= e_len
-            cigars.append(("{}M".format(e_len)))
-        else:
-            assert e_len == tmp_read_len
-            cigars.append(("{}M".format(tmp_read_len)))
-            tmp_read_len = 0
-            break
-        prev_e = e
-
-    # Define MD, XM, NM, Zs, read_seq
-    MD, XM, NM, Zs, read_seq = "", 0, 0, "", ""
-    assert len(cigars) == len(cigar_descs)
-    MD_match_len, Zs_match_len = 0, 0
-    cur_trans_pos = frag_pos
-    for c in range(len(cigars)):
-        cigar = cigars[c]
-        cigar_len, cigar_op = int(cigar[:-1]), cigar[-1]
-        cigar_desc = cigar_descs[c]
-        if cigar_op == 'N':
-            continue
-        if cigar_op == 'M':
-            for add_match_len, alt_base, snp_id in cigar_desc:
-                MD_match_len += add_match_len
-                Zs_match_len += add_match_len
-                assert cur_trans_pos + add_match_len <= len(trans_seq)
-                read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-                cur_trans_pos += add_match_len
-                if alt_base != "":
-                    if MD_match_len > 0:
-                        MD += ("{}".format(MD_match_len))
-                        MD_match_len = 0
-                    MD += trans_seq[cur_trans_pos]
-                    if snp_id != "":
-                        if Zs != "":
-                            Zs += ","
-                        Zs += ("{}|S|{}".format(Zs_match_len, snp_id))
-                        Zs_match_len = 0
-                    else:
-                        Zs_match_len += 1
-                    if snp_id == "":
-                        XM += 1
-                        NM += 1
-                    read_seq += alt_base
-                    cur_trans_pos += 1
-        elif cigar_op == 'D':
-            assert len(cigar_desc) == 1
-            add_match_len, del_len, snp_id = cigar_desc[0]
-            MD_match_len += add_match_len
-            Zs_match_len += add_match_len
-            if MD_match_len > 0:
-                MD += ("{}".format(MD_match_len))
-                MD_match_len = 0
-            MD += ("^{}".format(trans_seq[cur_trans_pos:cur_trans_pos+cigar_len]))
-            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-            if Zs != "":
-                Zs += ","
-            Zs += ("{}|D|{}".format(Zs_match_len, cigar_desc[0][-1]))
-            Zs_match_len = 0
-            cur_trans_pos += cigar_len
-        elif cigar_op == 'I':
-            assert len(cigar_desc) == 1
-            add_match_len, ins_seq, snp_id = cigar_desc[0]
-            ins_len = len(ins_seq)
-            MD_match_len += add_match_len
-            Zs_match_len += add_match_len
-            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-            read_seq += ins_seq
-            if Zs != "":
-                Zs += ","
-            Zs += ("{}|I|{}".format(Zs_match_len, cigar_desc[0][-1]))
-            Zs_match_len = 0
-        else:
-            assert False
-
-    if MD_match_len > 0:
-        MD += ("{}".format(MD_match_len))
-
-    if len(read_seq) != read_len:
-        print("read length differs:", len(read_seq), "vs.", read_len, file=sys.stderr)
-        print(pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs, file=sys.stderr)
-        assert False
-
-    return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
-
+def ConvertSAMAlignmentFromTranscriptToGenome():
+    None
 
 
 """
 """
-def getSAMAlignmentForRNA_orig(exons, chr_seq, trans_seq, frag_pos, read_len, chr_snps, snp_prob, err_rand_src, max_mismatch):
-    # Find the genomic position for frag_pos and exon number
-    tmp_frag_pos, tmp_read_len = frag_pos, read_len
-    pos, cigars, cigar_descs = exons[0][0], [], []
-    e_pos = 0
-    prev_e = None
-    for e_i in range(len(exons)):
-        e = exons[e_i]
-        if prev_e:
-            i_len = e[0] - prev_e[1] - 1
-            pos += i_len
-        e_len = e[1] - e[0] + 1
-        if e_len <= tmp_frag_pos:
-            tmp_frag_pos -= e_len
-            pos += e_len
-        else:
-            pos += tmp_frag_pos
-            e_pos = tmp_frag_pos
-            break                        
-        prev_e = e
-
-    # Define Cigar and its descriptions
-    assert e_i < len(exons)
-    e_len = exons[e_i][1] - exons[e_i][0] + 1
-    assert e_pos < e_len
-    cur_pos = pos
-    match_len = 0
-    prev_e = None
-    mismatch, remain_trans_len = 0, len(trans_seq) - (frag_pos + read_len)
-    assert remain_trans_len >= 0
-    for e_i in range(e_i, len(exons)):
-        e = exons[e_i]
-        if prev_e:
-            i_len = e[0] - prev_e[1] - 1
-            cur_pos += i_len
-            cigars.append(("{}N".format(i_len)))
-            cigar_descs.append([])
-        tmp_e_left = e_left = e[0] + e_pos
-        e_pos = 0
-
-        # Retreive SNPs
-        snps = getSNPs(chr_snps, e_left, e[1])
-
-        if snp_prob < 1.0 and len(snps) > 0:
-            snps_ = []
-            for snp in snps:
-                if random.random() <= snp_prob:
-                    snps_.append(snp)
-            snps = snps_
-            
-        # Simulate mismatches due to sequencing errors
-        mms = []
-        for i in range(e_left, min(e[1], e_left + tmp_read_len - 1)):
-            if err_rand_src.getRand() == 1:
-                assert i < len(chr_seq)
-                err_base = "A"
-                #rand = random.randint(0, 2)
-                rand = myrandint(0, 2)
-                if chr_seq[i] == "A":
-                    err_base = "GCT"[rand]
-                elif chr_seq[i] == "C":
-                    err_base = "AGT"[rand]
-                elif chr_seq[i] == "G":
-                    err_base = "ACT"[rand]
-                else:
-                    err_base = "ACG"[rand]                    
-                mms.append(["", "single", i, err_base])
-
-        tmp_diffs = snps + mms
-        tmp_diffs = sorted(tmp_diffs, key=lambda t: t[2])
-        diffs = []
-        if len(tmp_diffs) > 0:
-            diffs = tmp_diffs[:1]
-            for diff in tmp_diffs[1:]:
-                _, tmp_type, tmp_pos, tmp_data = diff
-                _, prev_type, prev_pos, prev_data = diffs[-1]
-                if prev_type == "deletion":
-                    prev_pos += prev_data
-                if tmp_pos <= prev_pos:
-                    continue
-                diffs.append(diff)
-
-        cigar_descs.append([])
-        prev_diff = None
-        for diff in diffs:
-            diff_id, diff_type, diff_pos, diff_data = diff
-            if prev_diff:
-                prev_diff_id, prev_diff_type, prev_diff_pos, prev_diff_data = prev_diff
-                if prev_diff_type == "deletion":
-                    prev_diff_pos += prev_diff_data
-                assert prev_diff_pos < diff_pos
-            diff_pos2 = diff_pos
-            if diff_type == "deletion":
-                diff_pos2 += diff_data
-            if e_left + tmp_read_len - 1 < diff_pos2 or e[1] < diff_pos2:
-                break
-            
-            if diff_type == "single":
-                if mismatch + 1 > max_mismatch:
-                    continue
-                cigar_descs[-1].append([diff_pos - tmp_e_left, diff_data, diff_id])
-                tmp_e_left = diff_pos + 1
-                mismatch += 1
-            elif diff_type == "deletion":
-                del_len = diff_data
-                if mismatch + del_len > max_mismatch:
-                    continue
-                if len(cigars) <= 0 and diff_pos - e_left <= 0:
-                    continue                
-                if remain_trans_len < del_len:
-                    continue
-                remain_trans_len -= del_len
-                if diff_pos - e_left > 0:
-                    cigars.append("{}M".format(diff_pos - e_left))
-                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                    cigar_descs.append([])
-                cigars.append("{}D".format(del_len))
-                cigar_descs[-1].append([0, del_len, diff_id])
-                cigar_descs.append([])
-                tmp_read_len -= (diff_pos - e_left)
-                e_left = tmp_e_left = diff_pos + del_len
-
-            elif diff_type == "insertion":
-                ins_len = len(diff_data)
-                if mismatch + ins_len > max_mismatch:
-                    continue
-                if len(cigars) <= 0 and diff_pos - e_left <= 0:
-                    continue
-                if e_left + tmp_read_len - 1 < diff_pos + ins_len:
-                    break
-                if diff_pos - e_left > 0:
-                    cigars.append("{}M".format(diff_pos - e_left))
-                    cigar_descs[-1].append([diff_pos - tmp_e_left, "", ""])
-                    cigar_descs.append([])
-                cigars.append("{}I".format(ins_len))
-                cigar_descs[-1].append([0, diff_data, diff_id])
-                cigar_descs.append([])
-                tmp_read_len -= (diff_pos - e_left)
-                tmp_read_len -= ins_len
-                e_left = tmp_e_left = diff_pos
-
-            else:
-                assert False
-            prev_diff = diff
-
-        e_right = min(e[1], e_left + tmp_read_len - 1)
-        e_len = e_right - e_left + 1
-        remain_e_len = e_right - tmp_e_left + 1
-        if remain_e_len > 0:
-            cigar_descs[-1].append([remain_e_len, "", ""])
-        if e_len < tmp_read_len:
-            tmp_read_len -= e_len
-            cigars.append(("{}M".format(e_len)))
-        else:
-            assert e_len == tmp_read_len
-            cigars.append(("{}M".format(tmp_read_len)))
-            tmp_read_len = 0
-            break
-        prev_e = e
-
-    # Define MD, XM, NM, Zs, read_seq
-    MD, XM, NM, Zs, read_seq = "", 0, 0, "", ""
-    assert len(cigars) == len(cigar_descs)
-    MD_match_len, Zs_match_len = 0, 0
-    cur_trans_pos = frag_pos
-    for c in range(len(cigars)):
-        cigar = cigars[c]
-        cigar_len, cigar_op = int(cigar[:-1]), cigar[-1]
-        cigar_desc = cigar_descs[c]
-        if cigar_op == 'N':
-            continue
-        if cigar_op == 'M':
-            for add_match_len, alt_base, snp_id in cigar_desc:
-                MD_match_len += add_match_len
-                Zs_match_len += add_match_len
-                assert cur_trans_pos + add_match_len <= len(trans_seq)
-                read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-                cur_trans_pos += add_match_len
-                if alt_base != "":
-                    if MD_match_len > 0:
-                        MD += ("{}".format(MD_match_len))
-                        MD_match_len = 0
-                    MD += trans_seq[cur_trans_pos]
-                    if snp_id != "":
-                        if Zs != "":
-                            Zs += ","
-                        Zs += ("{}|S|{}".format(Zs_match_len, snp_id))
-                        Zs_match_len = 0
-                    else:
-                        Zs_match_len += 1
-                    if snp_id == "":
-                        XM += 1
-                        NM += 1
-                    read_seq += alt_base
-                    cur_trans_pos += 1
-        elif cigar_op == 'D':
-            assert len(cigar_desc) == 1
-            add_match_len, del_len, snp_id = cigar_desc[0]
-            MD_match_len += add_match_len
-            Zs_match_len += add_match_len
-            if MD_match_len > 0:
-                MD += ("{}".format(MD_match_len))
-                MD_match_len = 0
-            MD += ("^{}".format(trans_seq[cur_trans_pos:cur_trans_pos+cigar_len]))
-            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-            if Zs != "":
-                Zs += ","
-            Zs += ("{}|D|{}".format(Zs_match_len, cigar_desc[0][-1]))
-            Zs_match_len = 0
-            cur_trans_pos += cigar_len
-        elif cigar_op == 'I':
-            assert len(cigar_desc) == 1
-            add_match_len, ins_seq, snp_id = cigar_desc[0]
-            ins_len = len(ins_seq)
-            MD_match_len += add_match_len
-            Zs_match_len += add_match_len
-            read_seq += trans_seq[cur_trans_pos:cur_trans_pos+add_match_len]
-            read_seq += ins_seq
-            if Zs != "":
-                Zs += ","
-            Zs += ("{}|I|{}".format(Zs_match_len, cigar_desc[0][-1]))
-            Zs_match_len = 0
-        else:
-            assert False
-
-    if MD_match_len > 0:
-        MD += ("{}".format(MD_match_len))
-
-    if len(read_seq) != read_len:
-        print("read length differs:", len(read_seq), "vs.", read_len, file=sys.stderr)
-        print(pos, "".join(cigars), cigar_descs, MD, XM, NM, Zs, file=sys.stderr)
-        assert False
-
-    return pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq
-
+def ConvertSAMAlignmentFromTranscriptToGene():
+    None
+    
 
 """
 """
 cigar_re = re.compile('\d+\w')
-def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch):
-    assert chr in genome_seq
-    chr_seq = genome_seq[chr]
-    assert pos < len(chr_seq)
+def SAMRepOk(ref_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch):
+    assert pos < len(ref_seq)
 
     # Calculate XM and NM based on Cigar and Zs
     cigars = cigar_re.findall(cigar)
@@ -1051,7 +734,7 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
     for i in range(len(cigars)):
         cigar_len, cigar_op = cigars[i]
         if cigar_op == "M":
-            partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
+            partial_ref_seq = ref_seq[ref_pos:ref_pos+cigar_len]
             partial_read_seq = read_seq[read_pos:read_pos+cigar_len]
             assert len(partial_ref_seq) == len(partial_read_seq)
             ann_ref_seq += list(partial_ref_seq)
@@ -1066,7 +749,7 @@ def samRepOk(genome_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch
             ref_pos += cigar_len
             read_pos += cigar_len
         elif cigar_op == "D":
-            partial_ref_seq = chr_seq[ref_pos:ref_pos+cigar_len]
+            partial_ref_seq = ref_seq[ref_pos:ref_pos+cigar_len]
             ann_ref_rel += list(partial_ref_seq)
             ann_ref_seq += list(partial_ref_seq)
             ann_read_rel += (["-"] * cigar_len)
@@ -1232,6 +915,15 @@ def simulate_DNA_reads(base_fname, repeat_fname, genome_seq, snps,
         else:
             chr_snps = []
 
+        # Retreive SNPs
+        snps = chr_snps
+        if snp_prob < 1.0 and len(snps) > 0:
+            snps_ = []
+            for snp in snps:
+                if random.random() <= snp_prob:
+                    snps_.append(snp)
+            snps = snps_
+
         for f in range(t_num_frags):
             while True:
                 if len(chr_repeat_loci):
@@ -1254,8 +946,8 @@ def simulate_DNA_reads(base_fname, repeat_fname, genome_seq, snps,
             # SAM specification (v1.4)
             # http://samtools.sourceforge.net/
             flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignmentForDNA(chr_seq, frag_pos, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignmentForDNA(chr_seq, frag_pos+frag_len-read_len, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
+            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(chr_seq, frag_pos, read_len, snps, err_rand_src, max_mismatch)
+            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(chr_seq, frag_pos+frag_len-read_len, read_len, snps, err_rand_src, max_mismatch)
             swapped = False
             if paired_end:
                 #if random.randint(0, 1) == 1:
@@ -1274,8 +966,8 @@ def simulate_DNA_reads(base_fname, repeat_fname, genome_seq, snps,
 
             cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
             if sanity_check:
-                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
-                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+                SAMRepOk(chr_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
+                SAMRepOk(chr_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
             if Zs != "":
                 Zs = ("\tZs:Z:{}".format(Zs))
@@ -1317,141 +1009,212 @@ def simulate_DNA_reads(base_fname, repeat_fname, genome_seq, snps,
         read2_file.close()
 
 
-def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, snps,
+"""
+"""
+
+
+"""
+"""
+def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                        paired_end, read_len, frag_len, num_frag,
                        error_rate, err_rand_src, max_mismatch, snp_prob, expr_profile_type,
                        bisulfite, meth_prob,
-                       allele_specific, num_tran,
+                       allele_specific, num_genes, num_transcripts,
                        sanity_check, verbose):
-    num_transcripts = min(len(transcripts), num_tran)        
-    expr_profile = generate_rna_expr_profile(expr_profile_type, num_transcripts)
 
+
+    num_genes = min(len(genes), num_genes)
+    gene_ids = list(genes.keys())
+    random.shuffle(gene_ids)
+    gene_ids = gene_ids[:num_genes]
+
+    # DK - debugging purposes
+    gene_ids = set(["ENSG00000100095"])
+
+    transcript_ids = []
+    for gene_id in gene_ids:
+        # DK - debugging purposes
+        transcript_ids += genes[gene_id][0][:2]
+        # transcript_ids += genes[gene_id][0]
+
+    num_transcripts = min(len(transcript_ids), num_transcripts)
+
+    expr_profile = generate_rna_expr_profile(expr_profile_type, num_transcripts)
     expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
+    
     assert num_frag >= sum(expr_profile)
     while sum(expr_profile) < num_frag:
         for i in range(min(num_frag - sum(expr_profile), len(expr_profile))):
             expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
     
-    transcript_ids = sorted(list(transcripts.keys()))
     random.shuffle(transcript_ids)
     assert len(transcript_ids) >= len(expr_profile)
 
+    transcript_exprs = {}
+    for e, num_frags in enumerate(expr_profile):
+        transcript_id = transcript_ids[e]
+        transcript_exprs[transcript_id] = num_frags
+
+    # Construct a super transcript for each gene in which transcripts are included
+    super_transcripts = {}
+    for gene_id in gene_ids:
+        transcript_ids = genes[gene_id][0]
+        chr = transcripts[transcript_ids[0]][0]
+        tmp_exons = []
+        # Collect all exons of the gene
+        for tid in transcript_ids:
+            tmp_exons += transcripts[tid][3]
+
+        exons = make_super_transcripts(tmp_exons)
+        super_transcripts[gene_id] = exons
+
+    # Get snps in the super transcripts
+    snps = make_gene_snps(genome_snps, genes, super_transcripts)
+
+    def length_of_transcript(super_transcript):
+        return 0
+
     sam_file = open(base_fname + ".sam", "w")
+    sam_transcript_file = open(base_fname + ".tran.sam", "w")
+    sam_gene_file = open(base_fname + ".gene.sam", "w")
     stat_file = open(base_fname + ".stat", "w")
 
     # Write SAM header
     print("@HD\tVN:1.0\tSO:unsorted", file=sam_file)
     for chr in genome_seq.keys():
         print("@SQ\tSN:%s\tLN:%d" % (chr, len(genome_seq[chr])), file=sam_file)
+
+    print("@HD\tVN:1.0\tSO:unsorted", file=sam_transcript_file)
+    for transcript_id in transcript_ids:
+        transcript_len = transcripts[transcript_id][2]
+        print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_transcript_file)
+
+    print("@HD\tVN:1.0\tSO:unsorted", file=sam_gene_file)
+    for gene_id in gene_ids:
+        super_transcript = super_transcripts[gene_id]
+        print("@SQ\tSN:%s\tLN:%d" % (gene_id, length_of_transcript(super_transcript)), file=sam_gene_file)
     
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
         read2_file = open(base_fname + "_2.fa", "w")
 
     cur_read_id = 1
-    for t in range(len(expr_profile)):
-        t_num_frags = expr_profile[t]
-        transcript_id = transcript_ids[t]
-        chr, strand, transcript_len, exons, gene_id = transcripts[transcript_id]
-        print(transcript_id, t_num_frags, file=sys.stderr)
+    for gene_id in gene_ids:
+        for transcript_id in genes[gene_id][0]:
+            if transcript_id not in transcript_exprs:
+                continue
 
-        if allele_specific:
-            ref_num_frags = int(t_num_frags / 2)
-            alt_num_frags = t_num_frags - ref_num_frags
-            print("%s\t%s_ref\t%d" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
-            print("%s\t%s_alt\t%d\tsnps" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
+            t_num_frags = transcript_exprs[transcript_id]
+            print(gene_id, transcript_id, t_num_frags, file=sys.stderr)
 
-        assert chr in genome_seq
-        chr_seq = genome_seq[chr]
-        chr_len = len(chr_seq)
+            chr, strand, transcript_len, exons, gene_id = transcripts[transcript_id]
 
-        t_seq = ""
-        for e in exons:
-            assert e[0] < e[1]
-            t_seq += chr_seq[e[0]:e[1]+1]
-        assert len(t_seq) == transcript_len
-
-        if chr in snps:
-            chr_snps = snps[chr]
-        else:
-            chr_snps = []
-
-        for f in range(t_num_frags):
-            frag_pos = myrandint(0, transcript_len - frag_len)
-
-            # DK - 50%/50% alleles
             if allele_specific:
-                if f < t_num_frags / 2:
-                    t_snp_prob = 0.0
-                else:
-                    t_snp_prob = 1.0
+                ref_num_frags = int(t_num_frags / 2)
+                alt_num_frags = t_num_frags - ref_num_frags
+                print("%s\t%s_ref\t%d" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
+                print("%s\t%s_alt\t%d\tsnps" % (gene_id, transcript_id, ref_num_frags), file=stat_file)
+
+            assert chr in genome_seq
+            chr_seq = genome_seq[chr]
+            chr_len = len(chr_seq)
+
+            transcript_seq = ""
+            for e in exons:
+                assert e[0] < e[1]
+                transcript_seq += chr_seq[e[0]:e[1]+1]
+            assert len(transcript_seq) == transcript_len
+
+            if gene_id in snps:
+                gene_snps = snps[gene_id]
             else:
-                t_snp_prob = snp_prob
+                gene_snps = []
 
-            # SAM specification (v1.4)
-            # http://samtools.sourceforge.net/
-            flag, flag2 = 99, 163  # 83, 147
-            pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignmentForRNA(exons, chr_seq, t_seq, frag_pos, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
-            pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignmentForRNA(exons, chr_seq, t_seq, frag_pos+frag_len-read_len, read_len, chr_snps, t_snp_prob, err_rand_src, max_mismatch)
-            swapped = False
-            if paired_end:
-                #if random.randint(0, 1) == 1:
-                if myrandint(0, 1) == 1:
-                    swapped = True
-                if swapped:
-                    flag, flag2 = flag - 16, flag2 - 16
-                    pos, pos2 = pos2, pos
-                    cigars, cigars2 = cigars2, cigars
-                    cigar_descs, cigar2_descs = cigar2_descs, cigar_descs
-                    read_seq, read2_seq = read2_seq, read_seq
-                    XM, XM2 = XM2, XM
-                    NM, NM2 = NM2, NM
-                    MD, MD2 = MD2, MD
-                    Zs, Zs2 = Zs2, Zs
+            # Retreive SNPs
+            if snp_prob < 1.0 and len(gene_snps) > 0:
+                gene_snps_ = []
+                for snp in snps:
+                    if random.random() <= snp_prob:
+                        snps_.append(snp)
+                gene_snps = snps_
 
-            cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
-            if sanity_check:
-                samRepOk(genome_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
-                samRepOk(genome_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+            for f in range(t_num_frags):
+                frag_pos = myrandint(0, transcript_len - frag_len)
 
-            if Zs != "":
-                Zs = ("\tZs:Z:{}".format(Zs))
-            if Zs2 != "":
-                Zs2 = ("\tZs:Z:{}".format(Zs2))
-
-            XS = "\tXS:A:{}".format(strand)
-            TI = "\tTI:Z:{}".format(transcript_id)
-
-            if bisulfite:
-                assert meth_prob >= 0 and meth_prob <= 1; 
-                for i in range(len(read_seq)): 
-                    if i == len(read_seq)-1: 
-                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
-                            if random.random() <= meth_prob: 
-                                read_seq = strsub("T", i, read_seq); 
-                    else: 
-                        if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
-                            if random.random() <= meth_prob: 
-                                read_seq = strsub("T", i, read_seq); 
-
-            print(">{}".format(cur_read_id), file=read_file)
-            if swapped:
-                print(reverse_complement(read_seq), file=read_file)
-            else:
-                print(read_seq, file=read_file)
-            print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, chr, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI), file=sam_file)
-            if paired_end:
-                print(">{}".format(cur_read_id), file=read2_file)
-                if swapped:
-                    print(read2_seq, file=read2_file)
+                # DK - 50%/50% alleles
+                if allele_specific:
+                    if f < t_num_frags / 2:
+                        t_snp_prob = 0.0
+                    else:
+                        t_snp_prob = 1.0
                 else:
-                    print(reverse_complement(read2_seq), file=read2_file)
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, chr, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI), file=sam_file)
+                    t_snp_prob = snp_prob
 
-            cur_read_id += 1
+                # SAM specification (v1.4)
+                # http://samtools.sourceforge.net/
+                flag, flag2 = 99, 163  # 83, 147
+                pos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(transcript_seq, frag_pos, read_len, gene_snps, err_rand_src, max_mismatch)
+                pos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(transcript_seq, frag_pos+frag_len-read_len, read_len, gene_snps, err_rand_src, max_mismatch)
+                swapped = False
+                if paired_end:
+                    if myrandint(0, 1) == 1:
+                        swapped = True
+                    if swapped:
+                        flag, flag2 = flag - 16, flag2 - 16
+                        pos, pos2 = pos2, pos
+                        cigars, cigars2 = cigars2, cigars
+                        cigar_descs, cigar2_descs = cigar2_descs, cigar_descs
+                        read_seq, read2_seq = read2_seq, read_seq
+                        XM, XM2 = XM2, XM
+                        NM, NM2 = NM2, NM
+                        MD, MD2 = MD2, MD
+                        Zs, Zs2 = Zs2, Zs
+
+                cigar_str, cigar2_str = "".join(cigars), "".join(cigars2)
+                if sanity_check:
+                    SAMRepOk(transcript_seq, read_seq, chr, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
+                    SAMRepOk(transcript_seq, read2_seq, chr, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+
+                if Zs != "":
+                    Zs = ("\tZs:Z:{}".format(Zs))
+                if Zs2 != "":
+                    Zs2 = ("\tZs:Z:{}".format(Zs2))
+
+                XS = "\tXS:A:{}".format(strand)
+                TI = "\tTI:Z:{}".format(transcript_id)
+
+                if bisulfite:
+                    assert meth_prob >= 0 and meth_prob <= 1; 
+                    for i in range(len(read_seq)): 
+                        if i == len(read_seq)-1: 
+                            if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                                if random.random() <= meth_prob: 
+                                    read_seq = strsub("T", i, read_seq); 
+                        else: 
+                            if read_seq[i] == 'C' and genome_seq[chr][pos+len(read_seq)] == "G": 
+                                if random.random() <= meth_prob: 
+                                    read_seq = strsub("T", i, read_seq); 
+
+                print(">{}".format(cur_read_id), file=read_file)
+                if swapped:
+                    print(reverse_complement(read_seq), file=read_file)
+                else:
+                    print(read_seq, file=read_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, transcript_id, pos + 1, cigar_str, chr, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI), file=sam_transcript_file)
+                if paired_end:
+                    print(">{}".format(cur_read_id), file=read2_file)
+                    if swapped:
+                        print(read2_seq, file=read2_file)
+                    else:
+                        print(reverse_complement(read2_seq), file=read2_file)
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, chr, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI), file=sam_transcript_file)
+
+                cur_read_id += 1
             
     sam_file.close()
+    sam_transcript_file.close()
+    sam_gene_file.close()
     stat_file.close()
     read_file.close()
     if paired_end:
@@ -1466,7 +1229,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                    error_rate, max_mismatch,
                    random_seed, snp_prob,
                    bisulfite, meth_prob,
-                   allele_specific, num_tran,
+                   allele_specific, num_gene, num_tran,
                    sanity_check, verbose):
     random.seed(random_seed, version=1)
     err_rand_src = ErrRandomSource(error_rate / 100.0)
@@ -1476,11 +1239,10 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
 
     genome_seq = read_genome(genome_file)
     snps = read_snp(snp_file)
-    
+
+    genes, transcripts = {}, {}
     if rna:
-        genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len)
-    else:
-        genes, transcripts = {}, {}
+        genes, transcripts = read_transcript(genome_seq, gtf_file, frag_len, verbose)
 
     if sanity_check:
         sanity_check_input(genome_seq, genes, transcripts, snps, frag_len)
@@ -1490,7 +1252,7 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                            paired_end, read_len, frag_len, num_frag,
                            error_rate, err_rand_src, max_mismatch, snp_prob, expr_profile_type,
                            bisulfite, meth_prob,
-                           allele_specific, num_tran,
+                           allele_specific, num_gene, num_tran,
                            sanity_check, verbose)
     else:
         simulate_DNA_reads(base_fname, repeat_fname, genome_seq, snps,
@@ -1601,6 +1363,12 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Allows for allele-specific gene expressions')
+    parser.add_argument('--num-gene',
+                        dest='num_gene',
+                        action='store',
+                        type=int,
+                        default=5000,
+                        help='number of genes (default: 5000)')
     parser.add_argument('--num-transcript',
                         dest='num_tran',
                         action='store',
@@ -1631,6 +1399,6 @@ if __name__ == '__main__':
                    args.error_rate, args.max_mismatch,
                    args.random_seed, args.snp_prob, 
                    args.bisulfite, args.meth_prob,
-                   args.allele_specific, args.num_tran,
+                   args.allele_specific, args.num_gene, args.num_tran,
                    args.sanity_check, args.verbose)
 
