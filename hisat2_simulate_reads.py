@@ -764,10 +764,11 @@ def convertCoordFromGenomeToTranscript_two(transcript, gleft, gright):
 """
 """
 def convertSAMAlignmentFromTranscriptToGenome(transcript, tpos, tcigars):
-    gpos, gpos_i = convertCoordFromTranscriptToGenome(transcript, tpos)
+    gleft, gpos_i = convertCoordFromTranscriptToGenome(transcript, tpos)
+    gright = gleft
 
     # DK - debugging purposes
-    print("DK:", transcript, tpos, tcigars, gpos, gpos_i)
+    print("DK:", transcript, tpos, tcigars, gleft, gpos_i)
     gcigars = []
     for cigar in tcigars:
         cigar_len, cigar_op = int(cigar[:-1]), cigar[-1]
@@ -776,50 +777,50 @@ def convertSAMAlignmentFromTranscriptToGenome(transcript, tpos, tcigars):
             while cigar_len > 0:
                 assert gpos_i < len(transcript)
                 e_left, e_right = transcript[gpos_i][:2]
-                assert e_left <= gpos and gpos <= e_right
+                assert e_left <= gright and gright <= e_right
 
-                e_remain_len = e_right - gpos + 1
+                e_remain_len = e_right - gright + 1
                 if cigar_len < e_remain_len:
                     gcigars.append("%dM" % (cigar_len))
-                    gpos += cigar_len
+                    gright += cigar_len
                     break
                 else:
                     gcigars.append("%dM" % (e_remain_len))
                     cigar_len -= e_remain_len
                     gpos_i += 1
                     assert gpos_i < len(transcript)
-                    gpos = transcript[gpos_i][0]
+                    gright = transcript[gpos_i][0]
 
                     if cigar_len > 0:
-                        gcigars.append("%dN" % (gpos - e_right - 1))
+                        gcigars.append("%dN" % (gright - e_right - 1))
             
         elif cigar_op == 'D':
             assert False
             while cigar_len > 0:
                 assert gpos_i < len(transcript)
                 e_left, e_right = transcript[gpos_i][:2]
-                assert e_left <= gpos and gpos <= e_right
+                assert e_left <= gright and gright <= e_right
 
-                e_remain_len = e_right - gpos + 1
+                e_remain_len = e_right - gright + 1
                 if cigar_len < e_remain_len:
                     gcigars.append("%dM" % (cigar_len))
-                    gpos += cigar_len
+                    gright += cigar_len
                     break
                 else:
                     gcigars.append("%dM" % (e_remain_len))
                     cigar_len -= e_remain_len
                     gpos_i += 1
                     assert gpos_i < len(transcript)
-                    gpos = transcript[gpos_i][0]
+                    gright = transcript[gpos_i][0]
 
                     if cigar_len > 0:
-                        gcigars.append("%dN" % (gpos - e_right - 1))
+                        gcigars.append("%dN" % (gright - e_right - 1))
             
         else:
             assert cigar_op == 'I'
             gcigars.append(cigar)
 
-    return gpos, gcigars
+    return gleft, gcigars
 
 
 """
@@ -881,6 +882,13 @@ def SAMRepOk(ref_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch):
     assert len(ann_ref_seq) == len(ann_ref_rel)
     assert len(ann_ref_seq) == len(ann_read_rel)
     ann_Zs_seq = ["0" for i in range(len(ann_ref_seq))]
+
+    # DK - debugging purposes
+    print("DK:", ''.join(ann_ref_seq))
+    print("DK:", ''.join(ann_read_seq))
+    print("DK:", ''.join(ann_ref_rel))
+    print("DK:", ''.join(ann_read_rel))
+    
 
     Zss, Zs_i, snp_pos_add = [], 0, 0
     if Zs != "":
@@ -1360,7 +1368,8 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                     Zs2 = ("\tZs:Z:{}".format(Zs2))
 
                 XS = "\tXS:A:{}".format(strand)
-                TI = "\tTI:Z:{}".format(transcript_id)
+                TI = "\tTI:Z:{}-{}".format(transcript_id, pos + 1)
+                TI2 = "\tTI:Z:{}-{}".format(transcript_id, pos2 + 1)
 
                 def get_TO(compatible_transcripts):
                     TO = ""
@@ -1376,7 +1385,8 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 TO = get_TO(compatible_transcripts)
                 compatible_transcripts2 = find_compatible_transcripts(gene_id, transcript_id, pos2, rpos2)
                 TO2 = get_TO(compatible_transcripts2)
-                
+
+                # C to T conversion for BS-seq simulation
                 if bisulfite:
                     assert meth_prob >= 0 and meth_prob <= 1; 
                     for i in range(len(read_seq)): 
@@ -1389,49 +1399,48 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                                 if random.random() <= meth_prob: 
                                     read_seq = strsub("T", i, read_seq); 
 
+                # Write left and right reads
                 print(">{}".format(cur_read_id), file=read_file)
                 if swapped:
                     print(reverse_complement(read_seq), file=read_file)
                 else:
                     print(read_seq, file=read_file)
-
-                # Transcript SAM
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, transcript_id, pos + 1, cigar_str, transcript_id, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_transcript_file)
                 if paired_end:
                     print(">{}".format(cur_read_id), file=read2_file)
                     if swapped:
                         print(read2_seq, file=read2_file)
                     else:
                         print(reverse_complement(read2_seq), file=read2_file)
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI, TO2), file=sam_transcript_file)
-
-                # Gene/Superscript SAM
-                """
-                spos, scigars = convertSAMAlignmentFromTranscriptToGene(exons, pos, cigar, super_transcript)
-                spos2, scigars2 = convertSAMAlignmentFromTranscriptToGene(exons, pos2, cigar2, super_transcript)
-                scigar_str, scigar2_str = "".join(scigars), "".join(scigars2)
-                if sanity_check:
-                    SAMRepOk(super_transcript_seq, read_seq, gene_id, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
-                    SAMRepOk(super_transcript_seq, read2_seq, gene_id, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
-
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, genet_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_gene_file)
+                
+                # Transcript-based SAM
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, transcript_id, pos + 1, cigar_str, transcript_id, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TO), file=sam_transcript_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI, TO2), file=sam_gene_file)
-                """
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TO2), file=sam_transcript_file)
 
-                # Genome SAM
-                """
+                # Gene/Superscript-based SAM
+                spos, scigars = convertSAMAlignmentFromTranscriptToGene(exons, pos, cigars, super_exons)
+                spos2, scigars2 = convertSAMAlignmentFromTranscriptToGene(exons, pos2, cigars2, super_exons)
+                scigar_str, scigar2_str = "".join(scigars), "".join(scigars2)
+                # DK - debugging purposes
+                if sanity_check and False:
+                    SAMRepOk(super_transcript_seq, read_seq, gene_id, spos, scigar_str, XM, NM, MD, Zs, max_mismatch)
+                    SAMRepOk(super_transcript_seq, read2_seq, gene_id, spos2, scigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_gene_file)
+                if paired_end:
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI2, TO2), file=sam_gene_file)
+
+                # Genome-based SAM
                 gpos, gcigars = convertSAMAlignmentFromTranscriptToGenome(exons, pos, cigars)
                 gpos2, gcigars2 = convertSAMAlignmentFromTranscriptToGenome(exons, pos2, cigars2)
                 gcigar_str, gcigar2_str = "".join(gcigars), "".join(gcigars2)
                 if sanity_check:
-                    SAMRepOk(chr_seq, read_seq, gene_id, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
-                    SAMRepOk(chr_transcript_seq, read2_seq, gene_id, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+                    SAMRepOk(chr_seq, read_seq, chr, gpos, gcigar_str, XM, NM, MD, Zs, max_mismatch)
+                    SAMRepOk(chr_seq, read2_seq, chr, gpos2, gcigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, chr, spos + 1, gcigar_str, chr, gpos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_genome_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, chr, gpos + 1, gcigar_str, chr, gpos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, gpos2 + 1, gcigar2_str, chr, gpos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI, TO2), file=sam_genome_file)
-                """
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, gpos2 + 1, gcigar2_str, chr, gpos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI2, TO2), file=sam_file)
 
                 cur_read_id += 1
             
