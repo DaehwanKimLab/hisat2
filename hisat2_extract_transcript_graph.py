@@ -238,6 +238,7 @@ def find_snp_gene(chr_snp_list, chr_exon_list, snps_list):
             if ex[0] <= snp_start and snp_end <= ex[1]:
                 gene_id = ex[2]
                 snps_list[gene_id].append(chr_snp_list[snp_i])
+                break
 
             j += 1
 
