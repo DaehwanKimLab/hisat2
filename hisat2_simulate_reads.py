@@ -1421,7 +1421,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 if paired_end:
                     print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TO2), file=sam_transcript_file)
 
-                # Gene/Superscript-based SAM
+                # Gene/Supertranscript-based SAM
                 spos, scigars = convertSAMAlignmentFromTranscriptToGene(exons, pos, cigars, super_exons)
                 spos2, scigars2 = convertSAMAlignmentFromTranscriptToGene(exons, pos2, cigars2, super_exons)
                 scigar_str, scigar2_str = "".join(scigars), "".join(scigars2)

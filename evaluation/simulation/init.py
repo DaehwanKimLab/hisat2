@@ -2,6 +2,7 @@
 
 import sys, os
 import string, re
+from argparse import ArgumentParser
 
 use_message = '''
 '''
@@ -311,16 +312,15 @@ def classify_reads(RNA):
                 write_reads("sim_1.fa", type_read1_fname)
 
 
-def init():
+def init(startswith):
     read_dir_base = "../reads/simulation/"
     read_dirs = os.listdir(read_dir_base)
     for read_dir in read_dirs:
         if os.path.exists(read_dir):
             continue
 
-        # DK - debugging purposes
-        # if not read_dir.startswith("10K_RNA"):
-        #    continue
+        if startswith != "" and not read_dir.startswith(startswith):
+            continue
         
         if not os.path.exists(read_dir_base + read_dir + "/sim.sam") or \
                 not os.path.exists(read_dir_base + read_dir + "/sim_1.fa") or \
@@ -344,4 +344,15 @@ def init():
 
     
 if __name__ == "__main__":
-    init()
+    parser = ArgumentParser(
+        description='Set up simulation test sets')
+    parser.add_argument('--startswith',
+                        dest='startswith',
+                        type=str,
+                        default="",
+                        help='')
+
+    args = parser.parse_args()
+
+    init(args.startswith)
+
