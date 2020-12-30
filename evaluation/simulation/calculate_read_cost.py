@@ -2512,7 +2512,7 @@ def calculate_read_cost(single_end,
                 aligner_name = aligner + type
                 if version != "":
                     aligner_name += ("_%s" % version)
-                if aligner == "hisat2" and index_type != "":
+                if aligner in ["hisat2", "hisat-gt"] and index_type != "":
                     aligner_name += ("_" + index_type)
                 if aligner == "vg" and index_type != "":
                     aligner_name += ("_" + index_type)
