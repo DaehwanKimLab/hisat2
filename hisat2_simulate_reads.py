@@ -23,7 +23,7 @@
 #               Pattern Based on Bernoulli Trials                     #  
 
 
-import os, sys, math, random, re
+import os, sys, math, random, re, copy
 from collections import defaultdict, Counter
 import itertools
 from argparse import ArgumentParser, FileType
@@ -228,6 +228,10 @@ def read_transcript(genome_seq,
             tmp_transcripts[tran] = [chr, strand, transcript_len, exons, gene_id]
         else:
             min_transcript_len_filtered += 1
+            genes[gene_id][0].remove(tran)
+            # Remove a gene with no transcripts
+            if len(genes[gene_id][0]) == 0:
+                del genes[gene_id]
 
     transcripts = tmp_transcripts
 
@@ -277,7 +281,6 @@ def find_snp_gene(chr_snp_list, chr_exon_list, snps_list):
 
     # chr_snp_list and chr_exon_list are sorted by position
     # for each snp, find gene_id and added to snps_list[gene_id]
-
     snp_i = 0
     exon_j = 0
 
@@ -480,18 +483,18 @@ def generate_dna_expr_profile(genome_seq):
 
 """
 """
-def getSNPs(chr_snps, left, right):
-    low, high = 0, len(chr_snps)
+def getSNPs(ref_snps, left, right):
+    low, high = 0, len(ref_snps)
     while low < high:
         mid = (low + high) // 2
-        snpID, type, pos, data = chr_snps[mid]
+        snpID, type, pos, data = ref_snps[mid]
         if pos < left:
             low = mid + 1
         else:
             high = mid - 1
 
     snps = []
-    for snp in chr_snps[low:]:
+    for snp in ref_snps[low:]:
         snpID, type, pos, data = snp
         pos2 = pos
         if type == "deletion":
@@ -716,7 +719,7 @@ def convertCoordFromTranscriptToGenome(transcript, pos):
     for ei, e in enumerate(transcript):
         e_left, e_right = e[:2]
         e_len = e_right - e_left + 1
-        if pos <= e_len:
+        if pos < e_len:
             gpos = e_left + pos
             return gpos, ei
         else:
@@ -742,13 +745,15 @@ def convertCoordFromGenomeToTranscript(transcript, gpos):
     for ei, e in enumerate(transcript):
         e_left, e_right = e[:2]
         e_len = e_right - e_left + 1
+        if gpos < e_left:
+            return -1, -1
         if gpos <= e_right:
             tpos += (gpos - e_left)
             return tpos, ei
         else:
             tpos += e_len
 
-    return tpos, -1
+    return -1, -1
 
 
 """
@@ -760,73 +765,78 @@ def convertCoordFromGenomeToTranscript_two(transcript, gleft, gright):
     return tleft, tright, tleft_i, tright_i
 
 
-
 """
 """
 def convertSAMAlignmentFromTranscriptToGenome(transcript, tpos, tcigars):
     gleft, gpos_i = convertCoordFromTranscriptToGenome(transcript, tpos)
     gright = gleft
-
-    # DK - debugging purposes
-    print("DK:", transcript, tpos, tcigars, gleft, gpos_i)
     gcigars = []
     for cigar in tcigars:
         cigar_len, cigar_op = int(cigar[:-1]), cigar[-1]
 
-        if cigar_op == 'M':
+        if cigar_op == 'M' or cigar_op == 'D':
             while cigar_len > 0:
                 assert gpos_i < len(transcript)
                 e_left, e_right = transcript[gpos_i][:2]
                 assert e_left <= gright and gright <= e_right
-
                 e_remain_len = e_right - gright + 1
                 if cigar_len < e_remain_len:
-                    gcigars.append("%dM" % (cigar_len))
+                    gcigars.append("%d%s" % (cigar_len, cigar_op))
                     gright += cigar_len
                     break
                 else:
-                    gcigars.append("%dM" % (e_remain_len))
+                    gcigars.append("%d%s" % (e_remain_len, cigar_op))
                     cigar_len -= e_remain_len
                     gpos_i += 1
+                    if gpos_i == len(transcript):
+                        assert cigar_len == 0
+                        break
+
                     assert gpos_i < len(transcript)
                     gright = transcript[gpos_i][0]
 
                     if cigar_len > 0:
-                        gcigars.append("%dN" % (gright - e_right - 1))
-            
-        elif cigar_op == 'D':
-            assert False
-            while cigar_len > 0:
-                assert gpos_i < len(transcript)
-                e_left, e_right = transcript[gpos_i][:2]
-                assert e_left <= gright and gright <= e_right
-
-                e_remain_len = e_right - gright + 1
-                if cigar_len < e_remain_len:
-                    gcigars.append("%dM" % (cigar_len))
-                    gright += cigar_len
-                    break
-                else:
-                    gcigars.append("%dM" % (e_remain_len))
-                    cigar_len -= e_remain_len
-                    gpos_i += 1
-                    assert gpos_i < len(transcript)
-                    gright = transcript[gpos_i][0]
-
-                    if cigar_len > 0:
-                        gcigars.append("%dN" % (gright - e_right - 1))
-            
+                        gcigars.append("%dN" % (gright - e_right - 1))        
         else:
             assert cigar_op == 'I'
             gcigars.append(cigar)
 
     return gleft, gcigars
 
+def convertSAMAlignmentFromTranscriptToReal(transcript, tpos, tcigars):
+    return convertSAMAlignmentFromTranscriptToGenome(transcript, tpos, tcigars)
+
 
 """
 """
 def convertSAMAlignmentFromTranscriptToGene(transcript, tpos, tcigars, super_transcript):
-    s_pos, s_cigars = 0, []
+    def convertTranscript(super_transcript, transcript, tpos):
+        assert len(transcript) > 0
+
+        tmp_exons = []
+        s_i, t_i = 0, 0
+        while t_i < len(transcript):
+            se_left, se_right, se_pos = super_transcript[s_i]
+            te_left, te_right = transcript[t_i]
+            assert se_left <= te_left
+            if te_left > se_right:
+                s_i += 1
+                continue
+
+            tmp_exons.append([te_left - se_left + se_pos, te_right - se_left + se_pos])
+            t_i += 1
+
+        exons = [tmp_exons[0]]
+        for te in tmp_exons[1:]:
+            if exons[-1][1] + 1 == te[0]:
+                exons[-1][1] = te[1]
+            else:
+                exons.append(te)
+
+        return exons
+        
+    exons = convertTranscript(super_transcript, transcript, tpos)
+    s_pos, s_cigars = convertSAMAlignmentFromTranscriptToReal(exons, tpos, tcigars)
 
     return s_pos, s_cigars
     
@@ -882,13 +892,6 @@ def SAMRepOk(ref_seq, read_seq, chr, pos, cigar, XM, NM, MD, Zs, max_mismatch):
     assert len(ann_ref_seq) == len(ann_ref_rel)
     assert len(ann_ref_seq) == len(ann_read_rel)
     ann_Zs_seq = ["0" for i in range(len(ann_ref_seq))]
-
-    # DK - debugging purposes
-    print("DK:", ''.join(ann_ref_seq))
-    print("DK:", ''.join(ann_read_seq))
-    print("DK:", ''.join(ann_ref_rel))
-    print("DK:", ''.join(ann_read_rel))
-    
 
     Zss, Zs_i, snp_pos_add = [], 0, 0
     if Zs != "":
@@ -1147,13 +1150,11 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
     gene_ids = gene_ids[:num_genes]
 
     # DK - debugging purposes
-    gene_ids = set(["ENSG00000100095"])
+    # gene_ids = set(["ENSG00000100095"])
 
     transcript_ids = []
     for gene_id in gene_ids:
-        # DK - debugging purposes
-        transcript_ids += genes[gene_id][0][:2]
-        # transcript_ids += genes[gene_id][0]
+        transcript_ids += genes[gene_id][0]
 
     num_transcripts = min(len(transcript_ids), num_transcripts)
 
@@ -1185,7 +1186,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
         for tid in tran_ids:
             if tid not in transcript_ids:
                 continue
-            tmp_exons += transcripts[tid][3]
+            tmp_exons += copy.deepcopy(transcripts[tid][3])
 
         exons = make_super_transcripts(tmp_exons)
 
@@ -1201,13 +1202,6 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
 
     # Get snps in the super transcripts
     snps = make_gene_snps(genome_snps, genes, super_transcripts)
-
-    # DK - debugging purposes
-    print(super_transcripts)
-    print(snps)
-    for transcript_id in transcript_ids:
-        chr, strand, tran_len, exons, gene_id = transcripts[transcript_id]
-        print(transcript_id, exons)
 
     def find_compatible_transcripts(gene_id, transcript_id, left, right):
         assert left <= right
@@ -1242,7 +1236,6 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
             if tid == transcript_id:
                 continue
 
-            # DK - debugging purposes
             if tid not in transcript_exprs:
                 continue
 
@@ -1312,7 +1305,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
             assert len(transcript_seq) == transcript_len
 
             if gene_id in snps:
-                gene_snps = snps[gene_id]
+                gene_snps = copy.deepcopy(snps[gene_id])
             else:
                 gene_snps = []
 
@@ -1323,6 +1316,16 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                     if random.random() <= snp_prob:
                         snps_.append(snp)
                 gene_snps = snps_
+
+            # Convert SNP coordinate from Genome to Transcript
+            transcript_snps = []
+            for g, snp in enumerate(gene_snps):
+                snp_id, snp_type, snp_pos, snp_data = snp
+                tpos, tpos_i = convertCoordFromGenomeToTranscript(exons, snp_pos)
+                if tpos < 0:
+                    continue
+
+                transcript_snps.append([snp_id, snp_type, tpos, snp_data])
 
             for f in range(t_num_frags):
                 frag_pos = myrandint(0, transcript_len - frag_len)
@@ -1339,8 +1342,8 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 # SAM specification (v1.4)
                 # http://samtools.sourceforge.net/
                 flag, flag2 = 99, 163  # 83, 147
-                pos, rpos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(transcript_seq, frag_pos, read_len, gene_snps, err_rand_src, max_mismatch)
-                pos2, rpos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(transcript_seq, frag_pos+frag_len-read_len, read_len, gene_snps, err_rand_src, max_mismatch)
+                pos, rpos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(transcript_seq, frag_pos, read_len, transcript_snps, err_rand_src, max_mismatch)
+                pos2, rpos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(transcript_seq, frag_pos+frag_len-read_len, read_len, transcript_snps, err_rand_src, max_mismatch)
                 swapped = False
                 if paired_end:
                     if myrandint(0, 1) == 1:
@@ -1362,10 +1365,11 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                     SAMRepOk(transcript_seq, read_seq, transcript_id, pos, cigar_str, XM, NM, MD, Zs, max_mismatch)
                     SAMRepOk(transcript_seq, read2_seq, transcript_id, pos2, cigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
+                Zs_str, Zs2_str = "", ""
                 if Zs != "":
-                    Zs = ("\tZs:Z:{}".format(Zs))
+                    Zs_str = ("\tZs:Z:{}".format(Zs))
                 if Zs2 != "":
-                    Zs2 = ("\tZs:Z:{}".format(Zs2))
+                    Zs2_str = ("\tZs:Z:{}".format(Zs2))
 
                 XS = "\tXS:A:{}".format(strand)
                 TI = "\tTI:Z:{}-{}".format(transcript_id, pos + 1)
@@ -1413,22 +1417,21 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                         print(reverse_complement(read2_seq), file=read2_file)
                 
                 # Transcript-based SAM
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, transcript_id, pos + 1, cigar_str, transcript_id, pos2 + 1, read_seq, XM, NM, MD, Zs, XS, TO), file=sam_transcript_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag, transcript_id, pos + 1, cigar_str, transcript_id, pos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TO), file=sam_transcript_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TO2), file=sam_transcript_file)
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TO2), file=sam_transcript_file)
 
                 # Gene/Superscript-based SAM
                 spos, scigars = convertSAMAlignmentFromTranscriptToGene(exons, pos, cigars, super_exons)
                 spos2, scigars2 = convertSAMAlignmentFromTranscriptToGene(exons, pos2, cigars2, super_exons)
                 scigar_str, scigar2_str = "".join(scigars), "".join(scigars2)
-                # DK - debugging purposes
-                if sanity_check and False:
+                if sanity_check:
                     SAMRepOk(super_transcript_seq, read_seq, gene_id, spos, scigar_str, XM, NM, MD, Zs, max_mismatch)
                     SAMRepOk(super_transcript_seq, read2_seq, gene_id, spos2, scigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_gene_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TI, TO), file=sam_gene_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI2, TO2), file=sam_gene_file)
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_gene_file)
 
                 # Genome-based SAM
                 gpos, gcigars = convertSAMAlignmentFromTranscriptToGenome(exons, pos, cigars)
@@ -1438,9 +1441,9 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                     SAMRepOk(chr_seq, read_seq, chr, gpos, gcigar_str, XM, NM, MD, Zs, max_mismatch)
                     SAMRepOk(chr_seq, read2_seq, chr, gpos2, gcigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, chr, gpos + 1, gcigar_str, chr, gpos2 + 1, read_seq, XM, NM, MD, Zs, XS, TI, TO), file=sam_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, chr, gpos + 1, gcigar_str, chr, gpos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TI, TO), file=sam_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, gpos2 + 1, gcigar2_str, chr, gpos + 1, read2_seq, XM2, NM2, MD2, Zs2, XS, TI2, TO2), file=sam_file)
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, gpos2 + 1, gcigar2_str, chr, gpos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_file)
 
                 cur_read_id += 1
             
@@ -1495,7 +1498,8 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                            sanity_check, verbose)
         
 
-
+"""
+"""
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Simulate reads from GENOME (fasta) and GTF files')
