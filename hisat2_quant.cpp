@@ -31,6 +31,7 @@
 #include "timer.h"
 #include "filebuf.h"
 #include "ds.h"
+#include "quant.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -173,49 +174,13 @@ static void parseOptions(int argc, const char **argv) {
 template<typename TStr>
 static void driver(
                    const string& infile,
-                   EList<string>& infiles,
+                   vector<string>& infiles,
                    const string& outfile)
 {
     assert_gt(infiles.size(), 0);
 
-    // Adapt sequence files to ifstreams
-    for(size_t i = 0; i < infiles.size(); i++) {
-      ifstream fp(infiles[i], std::ifstream::in);
-      if (!fp.is_open()) {
-	cerr << "Error: could not open "<< infiles[i].c_str() << endl;
-	throw 1;
-      }
-
-      string line;
-      vector<string> fields;
-      while (getline(fp, line)) {
-
-	tokenize(line, "\t", fields);
-
-	const string& tranID = fields[2];
-	const string& pos = fields[3];
-
-	int32_t TI_i = -1, TO_i = -1;
-	for (size_t i = 12; i < fields.size(); ++i) {
-	  const string& field = fields[i];
-	  if (field[0] == 'T' && field[1] == 'I') {
-	    TI_i = i;
-	  }
-	  else if (field[0] == 'T' && field[1] == 'O') {
-	    TO_i = i;
-	  }
-	}
-	
-	cout << line << endl;
-	cout << "\t" << tranID << "\t" << pos << endl;
-	if (TI_i >= 0) {
-	  cout << "\t" << fields[TI_i] << endl;
-	}
-	if (TO_i >= 0) {
-	  cout << "\t" << fields[TO_i] << endl;
-	}
-      } 
-    }
+    Quant quant;
+    quant.init(infiles);
 }
 
 static const char *argv0 = NULL;
@@ -232,7 +197,7 @@ int hisat2_quant(int argc, const char **argv) {
     resetOptions();
     
     string infile;
-    EList<string> infiles;
+    vector<string> infiles;
     
     parseOptions(argc, argv);
     argv0 = argv[0];

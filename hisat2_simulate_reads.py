@@ -1265,6 +1265,10 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
     for gene_id in gene_ids:
         transcript_len = super_transcripts[gene_id][2]
         print("@SQ\tSN:%s\tLN:%d" % (gene_id, transcript_len), file=sam_gene_file)
+        for transcript_id in transcript_ids:
+            transcript_len = transcripts[transcript_id][2]
+            print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_gene_file)
+
     
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
