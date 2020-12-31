@@ -150,10 +150,17 @@ REPEAT_CPPS = \
 	bit_packed_array.cpp \
 	repeat_builder.cpp
 
+QUANT_CPPS = \
+	quant.cpp \
+	ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp \
+	ds.cpp multikey_qsort.cpp limit.cpp \
+	random_source.cpp tinythread.cpp
+
+
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
-HISAT2_QUANT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_quant_main.cpp
+HISAT2_QUANT_CPPS_MAIN = $(QUANT_CPPS) hisat2_quant_main.cpp
 HISAT2_DIFFEXPR_CPPS_MAIN = $(BUILD_CPPS) hisat2_diffexpr_main.cpp
 
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
@@ -447,20 +454,20 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 # hisat2-quant targets
 #
 
-hisat2-quant-bin: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
+hisat2-quant-bin: hisat2_quant.cpp $(QUANT_CPPS) $(HEADERS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX $(NOASSERT_FLAGS) -Wall \
 	$(INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_QUANT_CPPS_MAIN) \
+	$(HISAT2_QUANT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
-hisat2-quant-bin-debug: hisat2_quant.cpp $(QUANT_CPPS) $(SHARED_CPPS) $(HEADERS)
+hisat2-quant-bin-debug: hisat2_quant.cpp $(QUANT_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -Wall \
 	$(INC) \
 	-o $@ $< \
-	$(SHARED_CPPS) $(HISAT2_QUANT_CPPS_MAIN) \
+	$(HISAT2_QUANT_CPPS_MAIN) \
 	$(LIBS) $(BUILD_LIBS)
 
 

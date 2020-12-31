@@ -156,7 +156,7 @@ def simulate_reads(input_genomes,
             cmd_add += "--allele-specific "
             
             # DK - debugging purposes
-            cmd_add += "--num-tran 10 "
+            cmd_add += "--num-gene 5 "
 
         if v1:
             simulator = "hisat2_simulate_reads_v1.py"
