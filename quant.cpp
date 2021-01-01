@@ -19,6 +19,7 @@
 
 #include "quant.h"
 #include "tokenize.h"
+#include <iomanip>
 #include <cmath>
 #include <algorithm>
 
@@ -63,6 +64,11 @@ void Quant::init(vector<string>& infiles)
             fields.clear();
             tokenize(line, "\t", fields);
             
+            auto geneName = fields[2];
+            auto geneLen = seqLens[geneName];
+            size_t gid = addGeneIfNotExist(geneName, geneLen);
+            auto& gene = genes[gid];
+            
             int32_t TI_i = -1, TO_i = -1, Zs_i = -1;
             for (size_t i = 12; i < fields.size(); ++i) {
                 const string& field = fields[i];
@@ -88,11 +94,11 @@ void Quant::init(vector<string>& infiles)
             }
             
             auto transcriptLen = seqLens[transcriptName];
-            size_t id = addTranscriptIfNotExist(transcriptName, transcriptLen);
-            transcripts[id].count++;
+            size_t tid = addTranscriptIfNotExist(geneName, transcriptName, transcriptLen);
+            transcripts[tid].count++;
             
             comp.clear();
-            comp.insert(id);
+            comp.insert(tid);
             
             if (TO_i >= 0) {
                 vector<string> otherTranscripts;
@@ -108,15 +114,15 @@ void Quant::init(vector<string>& infiles)
                         // DK - debugging purposes
                         // otranscriptName += "_alt";
                     }
-                    size_t oid = addTranscriptIfNotExist(otranscriptName, otranscriptLen);
+                    size_t oid = addTranscriptIfNotExist(geneName, otranscriptName, otranscriptLen);
                     assert (comp.find(oid) == comp.end());
                     comp.insert(oid);
                 }
             }
             
-            auto itr = compMat.find(comp);
-            if (itr == compMat.end()) {
-                compMat[comp] = 1;
+            auto itr = gene.compMat.find(comp);
+            if (itr == gene.compMat.end()) {
+                gene.compMat[comp] = 1;
             } else {
                 itr->second++;
             }
@@ -130,87 +136,120 @@ void Quant::init(vector<string>& infiles)
 
 void Quant::calculate()
 {
-    const size_t nt = transcripts.size();
-    assert (nt > 0);
-    a = vector<double>(nt, 1.0 / transcripts.size());
-    n = vector<double>(nt, 0);
-    
-    vector<double> an(nt, 0.0);
-    while (true) {
-        fill(n.begin(), n.end(), 0);
-        for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
-            double total = 0;
-            for (auto t : compItem->first) {
-                total += a[t];
+    for (auto& gene : genes) {
+        const size_t nt = gene.transcripts.size();
+        assert (nt > 0);
+        
+        auto& a = gene.a;
+        auto& n = gene.n;
+        auto& compMat = gene.compMat;
+        
+        a = vector<double>(nt, 1.0 / nt);
+        n = vector<double>(nt, 0);
+        
+        vector<double> an(nt, 0.0);
+        while (true) {
+            fill(n.begin(), n.end(), 0);
+            for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
+                double total = 0;
+                for (auto t : compItem->first) {
+                    total += a[t];
+                }
+                
+                for (auto t : compItem->first) {
+                    auto nr = compItem->second; // number of reads
+                    n[t] += (nr * a[t] / total);
+                }
             }
             
-            for (auto t : compItem->first) {
-                auto nr = compItem->second; // number of reads
-                n[t] += (nr * a[t] / total);
+            double total = 0.0;
+            for (size_t t = 0; t < nt; ++t) {
+                total += (n[t] / transcripts[t].len);
             }
+            
+            for (size_t t = 0; t < nt; ++t) {
+                an[t] = n[t] / transcripts[t].len / total;
+            }
+            
+            double diff = 0.0;
+            for (size_t i = 0; i < a.size(); ++i) {
+                diff += abs(an[i] - a[i]);
+            }
+            
+            if (diff <= 0.0001) {
+                break;
+            }
+            
+            a = an;
         }
-        
-        double total = 0.0;
-        for (size_t t = 0; t < nt; ++t) {
-            total += (n[t] / transcripts[t].len);
-        }
-        
-        for (size_t t = 0; t < nt; ++t) {
-            an[t] = n[t] / transcripts[t].len / total;
-        }
-        
-        double diff = 0.0;
-        for (size_t i = 0; i < a.size(); ++i) {
-            diff += abs(an[i] - a[i]);
-        }
-     
-        if (diff <= 0.0001) {
-            break;
-        }
-        
-        a = an;
-      
-        // DK - debugging purposes
-#if 0
-        for (size_t i = 0; i < n.size(); ++i) {
-            cout << n[i] << ": " << a[i] << endl;
-        }
-#endif
     }
 }
 
 void Quant::showInfo() const
 {
-    cout << left << setw(20) << "Transcript Name" << setw(10) << "Length" << setw(10) << "Count" << endl;
-    for (const auto& transcript : transcripts) {
-        cout << setw(20) << transcript.name << setw(10) << transcript.len << setw(10) << transcript.count << endl;
-    }
-    
-    cout << endl << endl;
-    cout << "Compatibility matrix:" << endl;
-    for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
-        cout << "\t" << setw(10) << right << compItem->second << "\t" << left;
-        for (auto id : compItem->first) {
-            cout << setw(20) << transcripts[id].name;
+    for (const auto& gene : genes) {
+        const auto& a = gene.a;
+        const auto& n = gene.n;
+        const auto& compMat = gene.compMat;
+        
+        cout << endl << endl;
+        cout << "Gene: " << gene.name << endl << endl;
+        cout << "\t" << left << setw(20) << "Transcript Name" << right << setw(10) << "Length" << setw(10) << "Count" << endl;
+        for (size_t t = 0; t < gene.transcripts.size(); ++t) {
+            const auto tid = gene.transcripts[t];
+            const auto& transcript = transcripts[tid];
+            cout << "\t" << left << setw(20) << transcript.name << right << setw(10) << transcript.len << setw(10) << transcript.count << endl;
         }
-        cout << endl;
-    }
-    
-    cout << endl << endl;
-    cout << "Estimated:" << endl;
-    cout << "\t" << left << setw(20) << "Transcript Name" << setw(10) << "Count" << setw(10) << "Proportion" << endl;
-    for (size_t t = 0; t < transcripts.size(); ++t) {
-        const auto& transcript = transcripts[t];
-        cout << "\t" << setw(20) << transcript.name << setw(10) << n[t] << setw(10) << a[t] << endl;
+        
+        cout << endl << endl;
+        cout << "\tCompatibility matrix:" << endl;
+        for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
+            cout << "\t" << setw(10) << right << compItem->second << "\t" << left;
+            for (auto id : compItem->first) {
+                cout << "\t" << setw(20) << transcripts[id].name;
+            }
+            cout << endl;
+        }
+        
+        cout << endl << endl;
+        cout << "\tEstimated:" << endl;
+        cout << "\t\t" << left << setw(20) << "Transcript Name" << right << setw(10) << "Count" << setw(14) << "Proportion" << endl;
+        for (size_t t = 0; t < gene.transcripts.size(); ++t) {
+            const auto tid = gene.transcripts[t];
+            const auto& transcript = transcripts[tid];
+            cout << "\t\t" << left << setw(20) << transcript.name << right << setw(10) << n[t] << setw(14) << a[t] << endl;
+        }
     }
 }
 
-size_t Quant::addTranscriptIfNotExist(const string& transcriptName, uint64_t transcriptLen)
+size_t Quant::addGeneIfNotExist(const string& geneName, uint64_t geneLen)
+{
+    auto itr = ID2Gene.find(geneName);
+    if (itr != ID2Gene.end()) {
+        return itr->second;
+    }
+    
+    Gene gene;
+    gene.name = geneName;
+    gene.len = geneLen;
+    gene.count = 0;
+    
+    genes.push_back(gene);
+    size_t id = genes.size() - 1;
+    ID2Gene[geneName] = id;
+    return id;
+}
+
+size_t Quant::addTranscriptIfNotExist(const string& geneName, const string& transcriptName, uint64_t transcriptLen)
 {
     auto itr = ID2Transcript.find(transcriptName);
     if (itr != ID2Transcript.end()) {
         return itr->second;
     }
+    
+    assert (ID2Gene.find(geneName) != ID2Gene.end());
+    auto gene_id = ID2Gene[geneName];
+    auto& gene = genes[gene_id];
     
     Transcript transcript;
     transcript.name = transcriptName;
@@ -218,7 +257,10 @@ size_t Quant::addTranscriptIfNotExist(const string& transcriptName, uint64_t tra
     transcript.count = 0;
     
     transcripts.push_back(transcript);
-    size_t id = transcripts.size() - 1;
+    auto id = transcripts.size() - 1;
     ID2Transcript[transcriptName] = id;
+    
+    gene.transcripts.push_back(id);
+    
     return id;
 }

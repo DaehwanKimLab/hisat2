@@ -36,7 +36,8 @@ class Gene;
 /**
  *
  */
-class Quant {
+class Quant
+{
 public:
     void init(vector<string>& infiles);
     
@@ -44,29 +45,28 @@ public:
     
     void showInfo() const;
     
-    
 private:
-    size_t addTranscriptIfNotExist(const string& transcriptName, uint64_t transcriptLen);
+    size_t addGeneIfNotExist(const string& geneName, uint64_t geneLen);
+    size_t addTranscriptIfNotExist(const string& geneName, const string& transcriptName, uint64_t transcriptLen);
     
 private:
     map<string, uint64_t> seqLens;
     map<string, size_t> ID2Transcript;
-    vector<Transcript> transcripts;
+    map<string, size_t> ID2Gene;
     
-    // compatibility matrix
-    map<set<size_t>, size_t> compMat;
-    vector<double> a;
-    vector<double> n;
+private:
+    vector<Gene> genes;
+    vector<Transcript> transcripts;
 };
-
 
 /**
  *
  */
-class Transcript {
+class SeqElement
+{
 public:
-    Transcript() :
-      name("unknown")
+    SeqElement() :
+    name("unknown")
     , len(0)
     , count(0)
     {}
@@ -77,11 +77,40 @@ public:
     uint64_t len;
 };
 
+
 /**
  *
  */
-class Gene {
+class Transcript : public SeqElement
+{
 public:
+};
+
+
+class QuantCalc;
+/**
+ *
+ */
+class Gene : public SeqElement
+{
+public:
+    vector<uint64_t> transcripts;
+    
+public:
+    // compatibility matrix
+    map<set<size_t>, size_t> compMat;
+    vector<double> a;
+    vector<double> n;
+};
+
+
+/**
+ *
+ */
+class QuantCalc
+{
+public:
+    static void calculate();
 };
 
 

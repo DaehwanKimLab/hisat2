@@ -1248,6 +1248,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
 
     sam_file = open(base_fname + ".sam", "w")
     sam_transcript_file = open(base_fname + ".tran.sam", "w")
+    sam_stranscript_file = open(base_fname + ".stran.sam", "w")
     sam_gene_file = open(base_fname + ".gene.sam", "w")
     stat_file = open(base_fname + ".stat", "w")
 
@@ -1261,14 +1262,16 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
         transcript_len = transcripts[transcript_id][2]
         print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_transcript_file)
 
+    print("@HD\tVN:1.0\tSO:unsorted", file=sam_stranscript_file)
     print("@HD\tVN:1.0\tSO:unsorted", file=sam_gene_file)
     for gene_id in gene_ids:
         transcript_len = super_transcripts[gene_id][2]
+        print("@SQ\tSN:%s\tLN:%d" % (gene_id, transcript_len), file=sam_stranscript_file)
         print("@SQ\tSN:%s\tLN:%d" % (gene_id, transcript_len), file=sam_gene_file)
-        for transcript_id in transcript_ids:
-            transcript_len = transcripts[transcript_id][2]
-            print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_gene_file)
-
+    for transcript_id in transcript_ids:
+        transcript_len = transcripts[transcript_id][2]
+        print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_stranscript_file)
+        print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_gene_file)
     
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
@@ -1287,6 +1290,9 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
             assert e[0] < e[1]
             super_transcript_seq += chr_seq[e[0]:e[1]+1]
         assert len(super_transcript_seq) == super_transcript_len
+
+        gene_left, gene_right = super_exons[0][0], super_exons[-1][1]
+        gene_seq = chr_seq[gene_left:gene_right+1]
 
         for transcript_id in genes[gene_id][0]:
             if transcript_id not in transcript_exprs:
@@ -1425,7 +1431,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 if paired_end:
                     print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}".format(cur_read_id, flag2, transcript_id, pos2 + 1, cigar2_str, transcript_id, pos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TO2), file=sam_transcript_file)
 
-                # Gene/Supertranscript-based SAM
+                # Supertranscript-based SAM
                 spos, scigars = convertSAMAlignmentFromTranscriptToGene(exons, pos, cigars, super_exons)
                 spos2, scigars2 = convertSAMAlignmentFromTranscriptToGene(exons, pos2, cigars2, super_exons)
                 scigar_str, scigar2_str = "".join(scigars), "".join(scigars2)
@@ -1433,9 +1439,9 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                     SAMRepOk(super_transcript_seq, read_seq, gene_id, spos, scigar_str, XM, NM, MD, Zs, max_mismatch)
                     SAMRepOk(super_transcript_seq, read2_seq, gene_id, spos2, scigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
 
-                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TI, TO), file=sam_gene_file)
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, spos + 1, scigar_str, gene_id, spos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TI, TO), file=sam_stranscript_file)
                 if paired_end:
-                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_gene_file)
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, spos2 + 1, scigar2_str, gene_id, spos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_stranscript_file)
 
                 # Genome-based SAM
                 gpos, gcigars = convertSAMAlignmentFromTranscriptToGenome(exons, pos, cigars)
@@ -1449,10 +1455,22 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 if paired_end:
                     print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, chr, gpos2 + 1, gcigar2_str, chr, gpos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_file)
 
+                # Gene-based SAM - reuse genome-based SAM
+                genepos, genepos2 = gpos - super_exons[0][0], gpos2 - super_exons[0][0]
+                if sanity_check:
+                    SAMRepOk(gene_seq, read_seq, gene_id, genepos, gcigar_str, XM, NM, MD, Zs, max_mismatch)
+                    SAMRepOk(gene_seq, read2_seq, gene_id, genepos2, gcigar2_str, XM2, NM2, MD2, Zs2, max_mismatch)
+
+                print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag, gene_id, genepos + 1, gcigar_str, gene_id, genepos2 + 1, read_seq, XM, NM, MD, Zs_str, XS, TI, TO), file=sam_gene_file)
+                if paired_end:
+                    print("{}\t{}\t{}\t{}\t255\t{}\t{}\t{}\t0\t{}\t*\tXM:i:{}\tNM:i:{}\tMD:Z:{}{}{}{}{}".format(cur_read_id, flag2, gene_id, genepos2 + 1, gcigar2_str, gene_id, genepos + 1, read2_seq, XM2, NM2, MD2, Zs2_str, XS, TI2, TO2), file=sam_gene_file)
+
+
                 cur_read_id += 1
             
     sam_file.close()
     sam_transcript_file.close()
+    sam_stranscript_file.close()
     sam_gene_file.close()
     stat_file.close()
     read_file.close()
