@@ -53,22 +53,25 @@ static int nthreads;      // number of pthreads operating concurrently
 static string wrapper;        // type of wrapper script, so we can print correct usage
 static int  bigEndian;
 static int seed;
+static bool sim;
 
 bool bTranscriptome;    // run Transcriptome alignment
 
 static void resetOptions() {
-  verbose        = true;  // be talkative (default)
-  sanityCheck    = 0;     // do slow sanity checks
-  wrapper.clear();
-  bigEndian      = 0;  // little endian
-  seed           = 0;     // srandom seed
+    verbose        = true;  // be talkative (default)
+    sanityCheck    = 0;     // do slow sanity checks
+    wrapper.clear();
+    bigEndian      = 0;     // little endian
+    seed           = 0;     // srandom seed
+    sim            = false; // simulation input
 }
 
 // Argument constants for getopts
 enum {
-  ARG_USAGE = 256,
-  ARG_SEED,
-  ARG_WRAPPER,
+    ARG_USAGE = 256,
+    ARG_SEED,
+    ARG_SIM,
+    ARG_WRAPPER,
 };
 
 /**
@@ -82,6 +85,7 @@ static void printUsage(ostream& out) {
       << "    reference_in            comma-separated list of SAM files" << endl
       << "Options:" << endl
       << "    -p <int>                number of threads" << endl
+      << "    --sim                   simulation input" << endl
       << "    -q/--quiet              disable verbose output (for debugging)" << endl
       << "    -h/--help               print detailed description of tool and its options" << endl
       << "    --usage                 print this usage message" << endl
@@ -92,13 +96,14 @@ static void printUsage(ostream& out) {
 static const char *short_options = "qrap:h?nscfl:i:o:t:h:3C";
 
 static struct option long_options[] = {
-  {(char*)"quiet",          no_argument,       0,            'q'},
-  {(char*)"sanity",         no_argument,       0,            's'},
-  {(char*)"threads",        required_argument, 0,            'p'},
-  {(char*)"version",        no_argument,       &showVersion, 1},
-  {(char*)"seed",           required_argument, 0,            ARG_SEED},
-  {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
-  {(char*)0, 0, 0, 0} // terminator
+    {(char*)"quiet",          no_argument,       0,            'q'},
+    {(char*)"sanity",         no_argument,       0,            's'},
+    {(char*)"threads",        required_argument, 0,            'p'},
+    {(char*)"version",        no_argument,       &showVersion, 1},
+    {(char*)"seed",           required_argument, 0,            ARG_SEED},
+    {(char*)"sim",            no_argument,       0,            ARG_SIM},
+    {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
+    {(char*)0, 0, 0, 0} // terminator
 };
 
 /**
@@ -137,33 +142,36 @@ static void parseOptions(int argc, const char **argv) {
   int option_index = 0;
   int next_option;
   do {
-    next_option = getopt_long(argc, const_cast<char**>(argv),
-			      short_options, long_options, &option_index);
-    switch (next_option) {
-    case ARG_WRAPPER:
-      wrapper = optarg;
-      break;
-    case 'h':
-    case ARG_USAGE:
-      printUsage(cout);
-      throw 0;
-      break;
-    case 'p':
-      nthreads = parseNumber<int>(1, "-p arg must be at least 1");
-      break;
-    case ARG_SEED:
-      seed = parseNumber<int>(0, "--seed arg must be at least 0");
-      break;
-
-    case -1: /* Done with options. */
-      break;
-    case 0:
-      if (long_options[option_index].flag != 0)
-	break;
-    default:
-      printUsage(cerr);
-      throw 1;
-    }
+      next_option = getopt_long(argc, const_cast<char**>(argv),
+                                short_options, long_options, &option_index);
+      switch (next_option) {
+          case ARG_WRAPPER:
+              wrapper = optarg;
+              break;
+          case 'h':
+          case ARG_USAGE:
+              printUsage(cout);
+              throw 0;
+              break;
+          case 'p':
+              nthreads = parseNumber<int>(1, "-p arg must be at least 1");
+              break;
+          case ARG_SEED:
+              seed = parseNumber<int>(0, "--seed arg must be at least 0");
+              break;
+          case ARG_SIM:
+              sim = true;
+              break;
+              
+          case -1: /* Done with options. */
+              break;
+          case 0:
+              if (long_options[option_index].flag != 0)
+                  break;
+          default:
+              printUsage(cerr);
+              throw 1;
+      }
   } while(next_option != -1);
 }
 
@@ -180,116 +188,116 @@ static void driver(
     assert_gt(infiles.size(), 0);
 
     Quant quant;
-    quant.init(infiles);
+    quant.init(infiles, sim);
 }
 
 static const char *argv0 = NULL;
 
 extern "C" {
-/**
- * main function.  Parses command-line arguments.
- */
-int hisat2_quant(int argc, const char **argv) {
-  string outfile;
-  try {
-    // Reset all global state, including getopt state
-    opterr = optind = 1;
-    resetOptions();
-    
-    string infile;
-    vector<string> infiles;
-    
-    parseOptions(argc, argv);
-    argv0 = argv[0];
-    if(showVersion) {
-      cout << argv0 << " version " << string(HISAT2_VERSION).c_str() << endl;
-      if(sizeof(void*) == 4) {
-	cout << "32-bit" << endl;
-      } else if(sizeof(void*) == 8) {
-	cout << "64-bit" << endl;
-      } else {
-	cout << "Neither 32- nor 64-bit: sizeof(void*) = " << sizeof(void*) << endl;
-      }
-      cout << "Built on " << BUILD_HOST << endl;
-      cout << BUILD_TIME << endl;
-      cout << "Compiler: " << COMPILER_VERSION << endl;
-      cout << "Options: " << COMPILER_OPTIONS << endl;
-      cout << "Sizeof {int, long, long long, void*, size_t, off_t}: {"
-	   << sizeof(int)
-	   << ", " << sizeof(long) << ", " << sizeof(long long)
-	   << ", " << sizeof(void *) << ", " << sizeof(size_t)
-	   << ", " << sizeof(off_t) << "}" << endl;
-      return 0;
-    }
-    
-    // Get input filename
-    if(optind >= argc) {
-      cerr << "No input sequence or sequence file specified!" << endl;
-      printUsage(cerr);
-      return 1;
-    }
-    infile = argv[optind++];
-
+    /**
+     * main function.  Parses command-line arguments.
+     */
+    int hisat2_quant(int argc, const char **argv) {
+        string outfile;
+        try {
+            // Reset all global state, including getopt state
+            opterr = optind = 1;
+            resetOptions();
+            
+            string infile;
+            vector<string> infiles;
+            
+            parseOptions(argc, argv);
+            argv0 = argv[0];
+            if(showVersion) {
+                cout << argv0 << " version " << string(HISAT2_VERSION).c_str() << endl;
+                if(sizeof(void*) == 4) {
+                    cout << "32-bit" << endl;
+                } else if(sizeof(void*) == 8) {
+                    cout << "64-bit" << endl;
+                } else {
+                    cout << "Neither 32- nor 64-bit: sizeof(void*) = " << sizeof(void*) << endl;
+                }
+                cout << "Built on " << BUILD_HOST << endl;
+                cout << BUILD_TIME << endl;
+                cout << "Compiler: " << COMPILER_VERSION << endl;
+                cout << "Options: " << COMPILER_OPTIONS << endl;
+                cout << "Sizeof {int, long, long long, void*, size_t, off_t}: {"
+                << sizeof(int)
+                << ", " << sizeof(long) << ", " << sizeof(long long)
+                << ", " << sizeof(void *) << ", " << sizeof(size_t)
+                << ", " << sizeof(off_t) << "}" << endl;
+                return 0;
+            }
+            
+            // Get input filename
+            if(optind >= argc) {
+                cerr << "No input sequence or sequence file specified!" << endl;
+                printUsage(cerr);
+                return 1;
+            }
+            infile = argv[optind++];
+            
 #if 0
-    if(optind >= argc) {
-      cerr << "No output file specified!" << endl;
-      printUsage(cerr);
-      return 1;
-    }
-    outfile = argv[optind++];
+            if(optind >= argc) {
+                cerr << "No output file specified!" << endl;
+                printUsage(cerr);
+                return 1;
+            }
+            outfile = argv[optind++];
 #endif
-    
-    tokenize(infile, ",", infiles);
-    if(infiles.size() < 1) {
-      cerr << "Tokenized input file list was empty!" << endl;
-      printUsage(cerr);
-      return 1;
-    }
-    
-    // Optionally summarize
-    if(verbose) {
-      cerr << "Settings:" << endl;
-      // << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl;
-      cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
-	   << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
-	   << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;
+            
+            tokenize(infile, ",", infiles);
+            if(infiles.size() < 1) {
+                cerr << "Tokenized input file list was empty!" << endl;
+                printUsage(cerr);
+                return 1;
+            }
+            
+            // Optionally summarize
+            if(verbose) {
+                cerr << "Settings:" << endl;
+                // << "  Output files: \"" << outfile.c_str() << ".*." << gfm_ext << "\"" << endl;
+                cerr << "  Endianness: " << (bigEndian? "big":"little") << endl
+                << "  Actual local endianness: " << (currentlyBigEndian()? "big":"little") << endl
+                << "  Sanity checking: " << (sanityCheck? "enabled":"disabled") << endl;
 #ifdef NDEBUG
-      cerr << "  Assertions: disabled" << endl;
-	#else
-      cerr << "  Assertions: enabled" << endl;
+                cerr << "  Assertions: disabled" << endl;
+#else
+                cerr << "  Assertions: enabled" << endl;
 #endif
-      cerr << "  Random seed: " << seed << endl;
-      cerr << "  Sizeofs: void*:" << sizeof(void*) << ", int:" << sizeof(int) << ", long:" << sizeof(long) << ", size_t:" << sizeof(size_t) << endl;
-      cerr << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
-      for(size_t i = 0; i < infiles.size(); i++) {
-	cerr << "  " << infiles[i].c_str() << endl;
-      }
+                cerr << "  Random seed: " << seed << endl;
+                cerr << "  Sizeofs: void*:" << sizeof(void*) << ", int:" << sizeof(int) << ", long:" << sizeof(long) << ", size_t:" << sizeof(size_t) << endl;
+                cerr << "Input files DNA, " << file_format_names[format].c_str() << ":" << endl;
+                for(size_t i = 0; i < infiles.size(); i++) {
+                    cerr << "  " << infiles[i].c_str() << endl;
+                }
+            }
+            // Seed random number generator
+            srand(seed);
+            {
+                Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
+                try {
+                    driver<SString<char> >(infile, infiles, outfile);
+                } catch(bad_alloc& e) {
+                    throw e;
+                }
+            }
+            return 0;
+        } catch(std::exception& e) {
+            cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
+            cerr << "Command: ";
+            for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+            cerr << endl;
+            return 1;
+        } catch(int e) {
+            if(e != 0) {
+                cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
+                cerr << "Command: ";
+                for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
+                cerr << endl;
+            }
+            return e;
+        }
     }
-    // Seed random number generator
-    srand(seed);
-    {
-      Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
-      try {
-	driver<SString<char> >(infile, infiles, outfile);
-      } catch(bad_alloc& e) {
-	throw e;
-      }
-    }
-    return 0;
-  } catch(std::exception& e) {
-    cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
-    cerr << "Command: ";
-    for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-    cerr << endl;
-    return 1;
-  } catch(int e) {
-    if(e != 0) {
-      cerr << "Error: Encountered internal HISAT2 exception (#" << e << ")" << endl;
-      cerr << "Command: ";
-      for(int i = 0; i < argc; i++) cerr << argv[i] << " ";
-      cerr << endl;
-    }
-    return e;
-  }
-}
 }

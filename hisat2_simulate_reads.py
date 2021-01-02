@@ -1150,13 +1150,18 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
     gene_ids = gene_ids[:num_genes]
 
     # DK - debugging purposes
-    # gene_ids = set(["ENSG00000100095"])
+    gene_ids = set(["ENSG00000100095"])
 
     transcript_ids = []
     for gene_id in gene_ids:
         transcript_ids += genes[gene_id][0]
 
+    # DK - debugging purposes
+    # transcript_ids = ["ENST00000343706"]
+
     num_transcripts = min(len(transcript_ids), num_transcripts)
+    random.shuffle(transcript_ids)
+    transcript_ids = transcript_ids[:num_transcripts]
 
     expr_profile = generate_rna_expr_profile(expr_profile_type, num_transcripts)
     expr_profile = [int(expr_profile[i] * num_frag) for i in range(len(expr_profile))]
@@ -1166,8 +1171,6 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
         for i in range(min(num_frag - sum(expr_profile), len(expr_profile))):
             expr_profile[i] += 1
     assert num_frag == sum(expr_profile)
-    
-    random.shuffle(transcript_ids)
     assert len(transcript_ids) >= len(expr_profile)
 
     transcript_exprs = {}
@@ -1265,13 +1268,23 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
     print("@HD\tVN:1.0\tSO:unsorted", file=sam_stranscript_file)
     print("@HD\tVN:1.0\tSO:unsorted", file=sam_gene_file)
     for gene_id in gene_ids:
-        transcript_len = super_transcripts[gene_id][2]
+        chr, strand, transcript_len, exons = super_transcripts[gene_id][:4]
         print("@SQ\tSN:%s\tLN:%d" % (gene_id, transcript_len), file=sam_stranscript_file)
-        print("@SQ\tSN:%s\tLN:%d" % (gene_id, transcript_len), file=sam_gene_file)
+
+        allele_str = "\tAL:"
+        if gene_id in snps:
+            for s, snp in enumerate(snps[gene_id]):
+                snp_id, snp_type, snp_pos, snp_data = snp
+                if s > 0:
+                    allele_str += "|"
+                allele_str += "%s-%s-%d-%s" % (snp_id, snp_type, snp_pos + 1 - exons[0][0], snp_data)
+                
+        print("@SQ\tSN:%s\tLN:%d%s" % (gene_id, transcript_len, allele_str), file=sam_gene_file)
     for transcript_id in transcript_ids:
         transcript_len = transcripts[transcript_id][2]
+        gene_id = transcripts[transcript_id][4]
         print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_stranscript_file)
-        print("@SQ\tSN:%s\tLN:%d" % (transcript_id, transcript_len), file=sam_gene_file)
+        print("@SQ\tSN:%s\tLN:%d\tGE:%s" % (transcript_id, transcript_len, gene_id), file=sam_gene_file)
     
     read_file = open(base_fname + "_1.fa", "w")
     if paired_end:
@@ -1321,7 +1334,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
 
             # Retreive SNPs
             if snp_prob < 1.0 and len(gene_snps) > 0:
-                gene_snps_ = []
+                snps_ = []
                 for snp in snps:
                     if random.random() <= snp_prob:
                         snps_.append(snp)
@@ -1349,11 +1362,13 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
                 else:
                     t_snp_prob = snp_prob
 
+                cur_transcript_snps = transcript_snps if t_snp_prob > 0 else []
+
                 # SAM specification (v1.4)
                 # http://samtools.sourceforge.net/
                 flag, flag2 = 99, 163  # 83, 147
-                pos, rpos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(transcript_seq, frag_pos, read_len, transcript_snps, err_rand_src, max_mismatch)
-                pos2, rpos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(transcript_seq, frag_pos+frag_len-read_len, read_len, transcript_snps, err_rand_src, max_mismatch)
+                pos, rpos, cigars, cigar_descs, MD, XM, NM, Zs, read_seq = getSAMAlignment(transcript_seq, frag_pos, read_len, cur_transcript_snps, err_rand_src, max_mismatch)
+                pos2, rpos2, cigars2, cigar2_descs, MD2, XM2, NM2, Zs2, read2_seq = getSAMAlignment(transcript_seq, frag_pos+frag_len-read_len, read_len, cur_transcript_snps, err_rand_src, max_mismatch)
                 swapped = False
                 if paired_end:
                     if myrandint(0, 1) == 1:

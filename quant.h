@@ -30,6 +30,10 @@
 #include "assert_helpers.h"
 using namespace std;
 
+typedef double   qfloat;
+typedef uint64_t quint;
+typedef int64_t  qint;
+
 class Transcript;
 class Gene;
 
@@ -39,20 +43,20 @@ class Gene;
 class Quant
 {
 public:
-    void init(vector<string>& infiles);
+    void init(vector<string>& infiles, const bool sim = false);
     
     void calculate();
     
     void showInfo() const;
     
 private:
-    size_t addGeneIfNotExist(const string& geneName, uint64_t geneLen);
-    size_t addTranscriptIfNotExist(const string& geneName, const string& transcriptName, uint64_t transcriptLen);
+    size_t addGeneIfNotExist(const string& geneName, quint geneLen);
+    size_t addTranscriptIfNotExist(const string& geneName, const string& transcriptName, quint transcriptLen);
     
 private:
-    map<string, uint64_t> seqLens;
-    map<string, size_t> ID2Transcript;
-    map<string, size_t> ID2Gene;
+    map<string, quint> seqLens;
+    map<string, quint> ID2Transcript;
+    map<string, quint> ID2Gene;
     
 private:
     vector<Gene> genes;
@@ -73,8 +77,8 @@ public:
     
 public:
     string name;
-    uint64_t count;
-    uint64_t len;
+    quint  count;
+    quint  len;
 };
 
 
@@ -87,20 +91,48 @@ public:
 };
 
 
-class QuantCalc;
+class SNP;
 /**
  *
  */
 class Gene : public SeqElement
 {
 public:
-    vector<uint64_t> transcripts;
+    vector<quint> transcripts;
+    vector<quint> transcriptLens;
+    map<quint, quint> toLocalID;
+    
+public:
+    vector<SNP> snps;
+    
+public:
+    bool hasAlts(quint left, quint right) const;
     
 public:
     // compatibility matrix
-    map<set<size_t>, size_t> compMat;
-    vector<double> a;
-    vector<double> n;
+    map<set<quint>, quint> compMat;
+    vector<qfloat>         a;
+    vector<qfloat>         n;
+};
+
+
+/**
+ *
+ */
+class SNP
+{
+public:
+    enum TYPE
+    {
+        SINGLE = 0,
+        DELETION,
+        INSERTION
+    };
+    
+public:
+    string name;
+    quint  pos;
+    TYPE   type;
 };
 
 
@@ -110,7 +142,10 @@ public:
 class QuantCalc
 {
 public:
-    static void calculate();
+    static void calculate(const vector<quint>& tranLens,
+                          const map<set<quint>, quint>& compMat,
+                          vector<qfloat>& a,
+                          vector<qfloat>& n);
 };
 
 

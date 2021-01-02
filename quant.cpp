@@ -24,7 +24,7 @@
 #include <algorithm>
 
 
-void Quant::init(vector<string>& infiles)
+void Quant::init(vector<string>& infiles, const bool sim)
 {
     // Adapt sequence files to ifstreams
     for(size_t i = 0; i < infiles.size(); i++) {
@@ -37,7 +37,7 @@ void Quant::init(vector<string>& infiles)
         string line;
         vector<string> fields;
         vector<string> transcriptFields;
-        set<size_t> comp;
+        set<quint> comp;
         while (getline(fp, line)) {
             if (line.empty()) {
                 continue;
@@ -52,12 +52,45 @@ void Quant::init(vector<string>& infiles)
                 // @SQ     SN:ENSG00000100095      LN:7149
                 fields.clear();
                 tokenize(line, "\t", fields);
-                
-                assert (fields.size() == 3);
+                assert (fields.size() >= 3);
                 string seqName = fields[1].substr(3);
                 string lenStr = fields[2].substr(3);
-                uint64_t len = atol(lenStr.c_str());
+                quint len = atol(lenStr.c_str());
                 seqLens[seqName] = len;
+                
+                // DK - temporary parsing routine
+                if (fields.size() > 3) {
+                    if (fields[3][0] == 'A' && fields[3][1] == 'L') {
+                        vector<string> snpstrs;
+                        tokenize(fields[3].substr(3), "|", snpstrs);
+                        
+                        size_t gid = addGeneIfNotExist(seqName, len);
+                        auto& gene = genes[gid];
+                        
+                        vector<string> snpfields;
+                        for (const auto& snpstr : snpstrs) {
+                            snpfields.clear();
+                            tokenize(snpstr, "-", snpfields);
+                            assert (snpfields.size() == 4);
+                            
+                            SNP snp;
+                            snp.name = snpfields[0];
+                            switch (snpfields[3][0]) {
+                                case 'S': snp.type = SNP::SINGLE; break;
+                                case 'D': snp.type = SNP::DELETION; break;
+                                case 'I': snp.type = SNP::INSERTION; break;
+                                default: break;
+                            }
+                            snp.pos = atol(snpfields[2].c_str()) - 1;
+                            gene.snps.push_back(snp);
+                        }
+                    } else if (fields[3][0] == 'G' && fields[3][1] == 'E') {
+                        auto geneName = fields[3].substr(3);
+                        addTranscriptIfNotExist(geneName, seqName, len);
+                        addTranscriptIfNotExist(geneName, seqName + "_alt", len);
+                    }
+                }
+                
                 continue;
             }
             
@@ -68,6 +101,35 @@ void Quant::init(vector<string>& infiles)
             auto geneLen = seqLens[geneName];
             size_t gid = addGeneIfNotExist(geneName, geneLen);
             auto& gene = genes[gid];
+            
+            const auto& left_str = fields[3];
+            quint left = atol(left_str.c_str()) - 1;
+            const auto& cigar_str = fields[5];
+            
+            auto right = left;
+            size_t cigar_i = 0;
+            while (cigar_i < cigar_str.length()) {
+                quint cigar_len = 0;
+                while (cigar_i < cigar_str.length()) {
+                    auto ch = cigar_str[cigar_i];
+                    if (ch >= '0' && ch <= '9') {
+                        cigar_len = cigar_len * 10 + ch - '0';
+                        ++cigar_i;
+                    } else {
+                        break;
+                    }
+                }
+                auto cigar_op = cigar_str[cigar_i];
+                if (cigar_op == 'M' ||
+                    cigar_op == 'D' ||
+                    cigar_op == 'N') {
+                    right += cigar_len;
+                } else {
+                    assert (cigar_op == 'I');
+                }
+                
+                ++cigar_i;
+            }
             
             int32_t TI_i = -1, TO_i = -1, Zs_i = -1;
             for (size_t i = 12; i < fields.size(); ++i) {
@@ -88,17 +150,30 @@ void Quant::init(vector<string>& infiles)
             assert (transcriptFields.size() == 2);
             string transcriptName = transcriptFields[0];
             
-            if (Zs_i >= 0) {
-                // DK - debugging purposes
-                // transcriptName += "_alt";
+            bool ref = true, alt = true;
+            if (gene.hasAlts(left, right)) {
+                if (Zs_i >= 0) {
+                    ref = false;
+                    alt = true;
+                } else {
+                    ref = true;
+                    alt = false;
+                }
+            } else {
+                assert (Zs_i < 0);
             }
             
-            auto transcriptLen = seqLens[transcriptName];
-            size_t tid = addTranscriptIfNotExist(geneName, transcriptName, transcriptLen);
+            const auto tid = ID2Transcript[transcriptName];
             transcripts[tid].count++;
             
             comp.clear();
-            comp.insert(tid);
+            const auto local_tid = gene.toLocalID[tid];
+            if (ref) {
+                comp.insert(local_tid);
+            }
+            if (alt) {
+                comp.insert(local_tid + 1);
+            }
             
             if (TO_i >= 0) {
                 vector<string> otherTranscripts;
@@ -109,14 +184,16 @@ void Quant::init(vector<string>& infiles)
                     assert (transcriptFields.size() == 2);
                     
                     string otranscriptName = transcriptFields[0];
-                    auto otranscriptLen = seqLens[otranscriptName];
-                    if (Zs_i >= 0) {
-                        // DK - debugging purposes
-                        // otranscriptName += "_alt";
+                    const auto otid = ID2Transcript[otranscriptName];
+
+                    const auto local_otid = gene.toLocalID[otid];
+                    assert (comp.find(otid) == comp.end());
+                    if (ref) {
+                        comp.insert(local_otid);
                     }
-                    size_t oid = addTranscriptIfNotExist(geneName, otranscriptName, otranscriptLen);
-                    assert (comp.find(oid) == comp.end());
-                    comp.insert(oid);
+                    if (alt) {
+                        comp.insert(local_otid + 1);
+                    }
                 }
             }
             
@@ -137,51 +214,10 @@ void Quant::init(vector<string>& infiles)
 void Quant::calculate()
 {
     for (auto& gene : genes) {
-        const size_t nt = gene.transcripts.size();
-        assert (nt > 0);
-        
-        auto& a = gene.a;
-        auto& n = gene.n;
-        auto& compMat = gene.compMat;
-        
-        a = vector<double>(nt, 1.0 / nt);
-        n = vector<double>(nt, 0);
-        
-        vector<double> an(nt, 0.0);
-        while (true) {
-            fill(n.begin(), n.end(), 0);
-            for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
-                double total = 0;
-                for (auto t : compItem->first) {
-                    total += a[t];
-                }
-                
-                for (auto t : compItem->first) {
-                    auto nr = compItem->second; // number of reads
-                    n[t] += (nr * a[t] / total);
-                }
-            }
-            
-            double total = 0.0;
-            for (size_t t = 0; t < nt; ++t) {
-                total += (n[t] / transcripts[t].len);
-            }
-            
-            for (size_t t = 0; t < nt; ++t) {
-                an[t] = n[t] / transcripts[t].len / total;
-            }
-            
-            double diff = 0.0;
-            for (size_t i = 0; i < a.size(); ++i) {
-                diff += abs(an[i] - a[i]);
-            }
-            
-            if (diff <= 0.0001) {
-                break;
-            }
-            
-            a = an;
-        }
+        QuantCalc::calculate(gene.transcriptLens,
+                             gene.compMat,
+                             gene.a,
+                             gene.n);
     }
 }
 
@@ -193,11 +229,22 @@ void Quant::showInfo() const
         const auto& compMat = gene.compMat;
         
         cout << endl << endl;
-        cout << "Gene: " << gene.name << endl << endl;
+        cout << "Gene: " << gene.name << endl;
+        if (gene.snps.size() > 0) {
+            for (const auto& snp : gene.snps) {
+                cout << "\t" << setw(14) << snp.name << ": " << setw(12) << snp.pos << endl;
+            }
+        }
+        cout << endl << endl;
+        
         cout << "\t" << left << setw(20) << "Transcript Name" << right << setw(10) << "Length" << setw(10) << "Count" << endl;
         for (size_t t = 0; t < gene.transcripts.size(); ++t) {
             const auto tid = gene.transcripts[t];
             const auto& transcript = transcripts[tid];
+            if (transcript.count <= 0) {
+                continue;
+            }
+            
             cout << "\t" << left << setw(20) << transcript.name << right << setw(10) << transcript.len << setw(10) << transcript.count << endl;
         }
         
@@ -205,10 +252,15 @@ void Quant::showInfo() const
         cout << "\tCompatibility matrix:" << endl;
         for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
             cout << "\t" << setw(10) << right << compItem->second << "\t" << left;
-            for (auto id : compItem->first) {
-                cout << "\t" << setw(20) << transcripts[id].name;
+            for (const auto local_tid : compItem->first) {
+                const auto tid = gene.transcripts[local_tid];
+                cout << "\t" << setw(20) << transcripts[tid].name;
             }
             cout << endl;
+        }
+        
+        if (n.size() == 0) {
+            continue;
         }
         
         cout << endl << endl;
@@ -217,12 +269,22 @@ void Quant::showInfo() const
         for (size_t t = 0; t < gene.transcripts.size(); ++t) {
             const auto tid = gene.transcripts[t];
             const auto& transcript = transcripts[tid];
-            cout << "\t\t" << left << setw(20) << transcript.name << right << setw(10) << n[t] << setw(14) << a[t] << endl;
+            if (transcript.count <= 0 && n[t] < 1.0) {
+                continue;
+            }
+            
+            cout << "\t\t" << left << setw(20) << transcript.name
+                 << right << setw(10) << (quint)n[t]
+                 << setw(14) << quint(a[t] * 1000.0) / 1000.0;
+            if (true) {
+                cout << setw(10) << transcript.count;
+            }
+            cout << endl;
         }
     }
 }
 
-size_t Quant::addGeneIfNotExist(const string& geneName, uint64_t geneLen)
+size_t Quant::addGeneIfNotExist(const string& geneName, quint geneLen)
 {
     auto itr = ID2Gene.find(geneName);
     if (itr != ID2Gene.end()) {
@@ -240,7 +302,7 @@ size_t Quant::addGeneIfNotExist(const string& geneName, uint64_t geneLen)
     return id;
 }
 
-size_t Quant::addTranscriptIfNotExist(const string& geneName, const string& transcriptName, uint64_t transcriptLen)
+size_t Quant::addTranscriptIfNotExist(const string& geneName, const string& transcriptName, quint transcriptLen)
 {
     auto itr = ID2Transcript.find(transcriptName);
     if (itr != ID2Transcript.end()) {
@@ -261,6 +323,86 @@ size_t Quant::addTranscriptIfNotExist(const string& geneName, const string& tran
     ID2Transcript[transcriptName] = id;
     
     gene.transcripts.push_back(id);
+    gene.transcriptLens.push_back(transcriptLen);
+    gene.toLocalID[id] = gene.transcripts.size() - 1;
     
     return id;
+}
+
+bool Gene::hasAlts(quint left, quint right) const
+{
+    for (const auto& snp : snps) {
+        if (snp.pos >= right) {
+            break;
+        } else if (snp.pos >= left){
+            return true;
+        }
+    }
+    return false;
+}
+
+void QuantCalc::calculate(const vector<quint>& tranLens,
+                          const map<set<quint>, quint>& compMat,
+                          vector<qfloat>& a,
+                          vector<qfloat>& n)
+{
+    const quint nt = tranLens.size();
+    assert (nt > 0);
+    
+    a = vector<qfloat>(nt, 1.0 / (qfloat)nt);
+    n = vector<qfloat>(nt, 0.0);
+    
+    uint32_t iter = 0;
+    vector<qfloat> an(nt, 0.0);
+    while (true) {
+        fill(n.begin(), n.end(), 0);
+        for (auto compItem = compMat.begin(); compItem != compMat.end(); compItem++) {
+            qfloat total = 0;
+            for (auto t : compItem->first) {
+                assert (t < a.size());
+                total += a[t];
+            }
+            
+            for (auto t : compItem->first) {
+                auto nr = compItem->second; // number of reads
+                n[t] += (nr * a[t] / total);
+            }
+        }
+        
+        qfloat total = 0.0;
+        for (size_t t = 0; t < nt; ++t) {
+            total += (n[t] / tranLens[t]);
+        }
+        
+        for (size_t t = 0; t < nt; ++t) {
+            an[t] = n[t] / tranLens[t] / total;
+        }
+        
+        qfloat diff = 0.0;
+        for (size_t i = 0; i < a.size(); ++i) {
+            diff += abs(an[i] - a[i]);
+        }
+        
+        if (diff <= 0.00001) {
+            break;
+        }
+        
+#if 0
+        cout << "iteration: " << iter << endl;
+        for (size_t t = 0; t < nt; ++t) {
+            cout
+            << "\t" << setw(5) << t
+            << "\t" << setw(8) << n[t]
+            << "\t" << setw(10) << a[t] << " => " << setw(10) << an[t]
+            << endl;
+        }
+        
+        if (iter >= 5) {
+            break;
+        }
+#endif
+        
+        a = an;
+        ++iter;
+    }
 }
