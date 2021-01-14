@@ -534,7 +534,8 @@ def write_transcripts_haplotype(trhap_file, chrtome_name, old_chrname, haplotype
             if r > new_right:
                 new_right = r
 
-        print(ht[0], chrtome_name, new_left, new_right, ','.join(new_snps), file=trhap_file)
+        print('\t'.join([ht[0], chrtome_name, str(new_left), str(new_right), ','.join(new_snps)]), file=trhap_file)
+
 
     # print('tmp')
     return
