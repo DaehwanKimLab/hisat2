@@ -2005,11 +2005,11 @@ static void parseOptions(int argc, const char **argv) {
         penCanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
         penNoncanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
 
-        // -a
-        allHits = true;
+        // -k 20
+        allHits = false;
         msample = false;
+        khits = 20;
         mhits = 0;
-
     }
     
 #ifndef NDEBUG
