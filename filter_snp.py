@@ -76,12 +76,15 @@ def read_snps(snp_file):
     return snps, snps_by_chr
 
 
-def snp_check2(chrname, ref, snps, out_fp, stats, flank=10):
+
+def snp_check(chrname, ref, snps, out_fp, stats, flank=20):
     if bVerbose:
         print('Checking....', chrname, flank,  file=stderr)
 
-    pairlist = list()
-    pairset = set()
+    flankdict = defaultdict(list)
+
+    left_flank = 1
+    right_flank = flank
 
     for i, snp in enumerate(snps):
         if snp[1] != 'single':
@@ -91,7 +94,7 @@ def snp_check2(chrname, ref, snps, out_fp, stats, flank=10):
         snpbase = snp[3]
         refbase = ref[pos]
 
-        if pos < flank:
+        if pos < left_flank:
             if bVerbose:
                 print('Skip...', snp, file=stderr)
             continue
@@ -101,36 +104,29 @@ def snp_check2(chrname, ref, snps, out_fp, stats, flank=10):
                 print('Skip...', snp, file=stderr)
             continue
 
-        flankseq = ref[pos - flank:pos] + refbase + ref[pos + 1: pos + 1 + flank]
+        flankseq = ref[pos - left_flank:pos] + refbase + ref[pos + 1: pos + 1 + right_flank]
+        basepair = (refbase, snpbase)
 
-        pairlist.append([(refbase, snpbase), flankseq, pos])
-        pairset.add((refbase, snpbase, flankseq))
-
-    flankdict = defaultdict(list)
-
-    for x in pairlist:
-        pair = x[0]
-        flankseq = x[1]
-
-        flankdict[(pair, flankseq)].append(x)
+        flankdict[(basepair, flankseq)].append(pos)
 
     count = 0
     filtered_pos = dict()
     for x, v in flankdict.items():
-        if len(v) > 1:
+        if len(v) > 2:
             count += len(v)
 
             for i in v:
-                filtered_pos[i[2]] = 1
+                filtered_pos[i] = 1
 
     # do_filter
     for snp in snps:
         pos = snp[2]
+        snpstr = '\t'.join([snp[0], snp[1], snp[4], str(snp[2]), str(snp[3])])
 
         if snp[1] == 'single' and pos in filtered_pos:
-            continue
+            snpstr = '# ' + snpstr
 
-        print('\t'.join([snp[0], snp[1], snp[4], str(snp[2]), str(snp[3])]), file=out_fp)
+        print(snpstr, file=out_fp)
 
     count = len(filtered_pos)
     stats['Removed SNPs'] += count
@@ -149,7 +145,7 @@ def filter_SNPs(snp_file, genome_file, out_fname, flank_len):
     out_file = open(out_fname, 'w')
 
     for chrname in genome:
-        snp_check2(chrname, genome[chrname], snps_by_chr[chrname], out_file, stats, flank_len)
+        snp_check(chrname, genome[chrname], snps_by_chr[chrname], out_file, stats, flank_len)
 
     out_file.close()
 
@@ -181,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--flank-len', dest='flank_len',
                         type=int,
                         action='store',
-                        default=10,
+                        default=20,
                         help='Flank sequence length')
 
     parser.add_argument('--debug',
