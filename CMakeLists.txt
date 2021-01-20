@@ -46,6 +46,7 @@ set(HISAT2_BIN_LIST
 	hisat2-inspect-s
 	hisat2-inspect-l
 	hisat2-repeat
+	hisat2-quant-bin
     )
 
 set(HISAT2_LIB_LIST
@@ -136,6 +137,20 @@ set(INSPECT_CPPS
 	hisat2_inspect.cpp
 	)
 
+set(QUANT_BIN_CPPS
+		quant.cpp
+		ccnt_lut.cpp
+		ref_read.cpp
+		alphabet.cpp
+		shmem.cpp
+		ds.cpp
+		multikey_qsort.cpp
+		limit.cpp
+		random_source.cpp
+		tinythread.cpp
+		hisat2_quant.cpp
+		hisat2_quant_main.cpp
+		)
 
 set(HT2LIB_CPPS
 	hisat2lib/ht2_init.cpp
@@ -198,6 +213,7 @@ add_executable(hisat2-build-l ${BUILD_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-s ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-inspect-l ${INSPECT_CPPS} ${SHARED_CPPS})
 add_executable(hisat2-repeat ${REPEAT_CPPS} ${SHARED_CPPS})
+add_executable(hisat2-quant-bin ${QUANT_BIN_CPPS})
 set_target_properties(${HISAT2_BIN_LIST} PROPERTIES DEBUG_POSTFIX "-debug")
 set_target_properties(hisat2-align-l hisat2-build-l hisat2-inspect-l hisat2-repeat 
 	PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DBOWTIE_64BIT_INDEX")
@@ -241,7 +257,9 @@ add_dependencies(hisat2-all
 		hisat2-build-l
 		hisat2-inspect-s
 		hisat2-inspect-l
-		hisat2-repeat)
+		hisat2-repeat
+		hisat2-quant-bin
+		)
 
 #
 # Examples

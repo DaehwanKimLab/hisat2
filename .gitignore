@@ -17,6 +17,7 @@ determinize
 gcsa_alignment
 gcsa_test
 hisat2-repeat
+hisat2-quant-bin
 
 hisat2_test/*.bt2
 hisat2_test/*.ht2

@@ -210,14 +210,17 @@ HISAT2_BIN_LIST = hisat2-build-s \
 	hisat2-align-l \
 	hisat2-inspect-s \
 	hisat2-inspect-l \
-	hisat2-repeat
+	hisat2-repeat \
+	hisat2-quant-bin
+
 HISAT2_BIN_LIST_AUX = hisat2-build-s-debug \
 	hisat2-build-l-debug \
 	hisat2-align-s-debug \
 	hisat2-align-l-debug \
 	hisat2-inspect-s-debug \
 	hisat2-inspect-l-debug \
-	hisat2-repeat-debug
+	hisat2-repeat-debug \
+	hisat2-quant-bin-debug
 
 HT2LIB_DIR = hisat2lib
 HT2LIB_SRCS = $(SHARED_CPPS) \
@@ -300,6 +303,7 @@ repeat: hisat2-repeat
 
 repeat-debug: hisat2-repeat-debug
 
+.PHONY: quant
 quant: hisat2-quant-bin
 
 quant-debug: hisat2-quant-bin-debug
