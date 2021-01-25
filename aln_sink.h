@@ -2,7 +2,7 @@
  * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
  *
  * This file is part of Bowtie 2.
- * This file is edited by Yun (Leo) Zhang for HISAT-3N.
+ * This file is edited by Yun (Leo) Zhang for HISAT-2N.
  *
  * Bowtie 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -722,7 +722,7 @@ public:
 	 */
 	void addWrapper() { numWrappers_++; }
 
-	// for HISAT-3N
+	// for HISAT-2N
 	virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
 
 	}
@@ -1675,7 +1675,7 @@ protected:
 
 
 template <typename index_t>
-class AlnSinkWrap3N : public AlnSinkWrap<index_t> {
+class AlnSinkWrap2N : public AlnSinkWrap<index_t> {
     using AlnSinkWrap<index_t>::obuf_;
     using AlnSinkWrap<index_t>::g_;
     using AlnSinkWrap<index_t>::rdid_;
@@ -1702,7 +1702,7 @@ class AlnSinkWrap3N : public AlnSinkWrap<index_t> {
     using AlnSinkWrap<index_t>::selectAlnsToReport;
 
 public:
-    AlnSinkWrap3N(
+    AlnSinkWrap2N(
             AlnSink<index_t>& g,       // AlnSink being wrapped
             const ReportingParams& rp, // Parameters governing reporting
             Mapq& mapq,                // Mapq calculator
@@ -1881,7 +1881,7 @@ public:
 
                 init_ = false;
                 //g_.outq().finishRead(obuf_, rdid_, threadid_);
-                if (rd1_->threeN_cycle == threeN_GA_RC) {
+                if (rd1_->twoN_cycle == twoN_RC) {
                     g_.output(threadid_-1, met, obuf_);
                 }
                 return;
@@ -1965,7 +1965,7 @@ public:
 
                 init_ = false;
                 //g_.outq().finishRead(obuf_, rdid_, threadid_);
-                if (rd1_->threeN_cycle == threeN_GA_RC) {
+                if (rd1_->twoN_cycle == twoN_RC) {
                     g_.output(threadid_-1, met, obuf_);
                 }
                 return;
@@ -2248,7 +2248,7 @@ public:
             }
         } // if(suppress alignments)
         init_ = false;
-        if (rd1_->threeN_cycle == threeN_GA_RC) {
+        if (rd1_->twoN_cycle == twoN_RC) {
             g_.output(threadid_-1, met, obuf_);
         }
         return;
@@ -2334,7 +2334,7 @@ public:
 	}
 
     /**
-	 * Append a single alignment result, this function is for HSIAT-3N.
+	 * Append a single alignment result, this function is for HSIAT-2N.
 	 */
     /*virtual void append(
             ReportingMetrics&     met,
@@ -2358,7 +2358,7 @@ public:
 
 	}*/
 
-    // for hisat-3n
+    // for hisat-2n
     /*virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
 
     }*/
@@ -2394,12 +2394,12 @@ protected:
 
 /**
  * This is the class similar to AlnSinkSAM.
- * AlnSink3NSam will put all the alignment result information into the class Alignment in "alignment_3N.h".
- * This class should only be used for HISAT-3N (3N mode for HISAT2).
+ * AlnSink2NSam will put all the alignment result information into the class Alignment in "alignment_3N.h".
+ * This class should only be used for HISAT-2N (2N mode for HISAT2).
  */
 
 template <typename index_t>
-class AlnSink3NSam : public AlnSink<index_t> {
+class AlnSink2NSam : public AlnSink<index_t> {
 
 public:
     const SamConfig<index_t>& samc_;    // settings & routines for SAM output
@@ -2413,7 +2413,7 @@ public:
     //int nThreads;
     vector<Alignments*> alignmentsEachThreads;
 
-    AlnSink3NSam(
+    AlnSink2NSam(
             OutputQueue&     oq,            // output queue
             const SamConfig<index_t>& samc, // settings & routines for SAM output
             const StrList&   refnames,      // reference names
@@ -2439,7 +2439,7 @@ public:
         }
     }
 
-    ~AlnSink3NSam() {
+    ~AlnSink2NSam() {
         for (int i = 0; i < alignmentsEachThreads.size(); i++) {
             delete alignmentsEachThreads[i];
         }
@@ -2485,7 +2485,7 @@ public:
     }
 
     /**
-	 * Append a single alignment result, this function is for HSIAT-3N.
+	 * Append a single alignment result, this function is for HSIAT-2N.
 	 */
     void append(
             BTString&     o,           // write output to this string
@@ -2530,7 +2530,7 @@ public:
 
     /**
 	 * Append a single per-mate alignment result to the Alignment class.
-     * This function is for HISAT-3N.
+     * This function is for HISAT-2N.
 	 */
     virtual void appendMate(
             //Alignment*    newAlignment,
@@ -2557,7 +2557,7 @@ public:
         Alignment* newAlignment;
         alignmentsEachThreads[threadId0]->getFreeAlignmentPointer(newAlignment);
         alignmentsEachThreads[threadId0]->getSequence(rd);
-        newAlignment->cycle_3N = rd.threeN_cycle;
+        newAlignment->cycle_2N = rd.twoN_cycle;
 
         char buf[1024];
         char mapqInps[1024];

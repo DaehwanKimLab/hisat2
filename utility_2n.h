@@ -1,38 +1,38 @@
 /*
  * Copyright 2020, Yun (Leo) Zhang <imzhangyun@gmail.com>
  *
- * This file is part of HISAT-3N.
+ * This file is part of HISAT-2N.
  *
- * HISAT-3N is free software: you can redistribute it and/or modify
+ * HISAT-2N is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * HISAT-3N is distributed in the hope that it will be useful,
+ * HISAT-2N is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HISAT-3N.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT-2N.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HISAT2_UTILITY_3N_H
-#define HISAT2_UTILITY_3N_H
+#ifndef HISAT2_UTILITY_2N_H
+#define HISAT2_UTILITY_2N_H
 
 #include <string>
-#include <alignment_3n.h>
+#include <alignment_2n.h>
 
 
 using namespace std;
 
 /**
- * this is the class to convert asc2dna, asc2dnacomp, and dnacomp matrix for hisat-3n conversion.
+ * this is the class to convert asc2dna, asc2dnacomp, and dnacomp matrix for hisat-2n conversion.
  * always save the conversion as convertFrom and convertTo.
- * this class is to convert matrix for hisat2-build with (--3N) or hisat2-repeat with (--3N).
+ * this class is to convert matrix for hisat2-build with (--2N) or hisat2-repeat with (--2N).
  * hisat2 with (--base-change C,T) will not use this class.
  */
-class ConvertMatrix3N {
+class ConvertMatrix2N {
     char convertFrom = 'A';
     char convertTo = 'A';
     string allBase = "ACGT";
@@ -60,7 +60,14 @@ class ConvertMatrix3N {
             if (convertFrom == base) {
                 asc2dna[base] = charToInt(convertTo);
                 asc2dna[lowerBase] = charToInt(convertTo);
+
+                asc2dnacomp[complement(base)] = complement(convertTo);
+                asc2dnacomp[complement(lowerBase)] = complement(convertTo);
+                dnacomp[3-i] = charToInt(complement(convertTo));
             } else if (complement(convertFrom) == base) {
+                asc2dna[base] = charToInt(complement(convertTo));
+                asc2dna[lowerBase] = charToInt(complement(convertTo));
+
                 asc2dnacomp[base] = convertTo;
                 asc2dnacomp[lowerBase] = convertTo;
                 dnacomp[i] = charToInt(convertTo);
@@ -68,7 +75,7 @@ class ConvertMatrix3N {
         }
     }
 public:
-    ConvertMatrix3N(){
+    ConvertMatrix2N(){
 
     };
 
@@ -131,4 +138,4 @@ public:
     char& getLabel() { return label; }
 };
 
-#endif //HISAT2_UTILITY_3N_H
+#endif //HISAT2_UTILITY_2N_H

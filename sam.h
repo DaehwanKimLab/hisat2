@@ -29,7 +29,7 @@
 #include "scoring.h"
 #include "alt.h"
 #include "filebuf.h"
-#include "alignment_3n.h"
+#include "alignment_2n.h"
 
 enum {
 	// Comments use language from v1.4-r962 spec
@@ -504,7 +504,7 @@ void SamConfig<index_t>::printSqLines(BTString& o) const {
         o.append(buf);
         o.append('\n');
     }
-    if (!threeN) {
+    if (!twoN) {
         for(size_t i = 0; i < repnames_.size(); i++) {
             o.append("@SQ\tSN:");
             printRefName(o, repnames_[i]);
@@ -1243,7 +1243,7 @@ const
         o.append("ZS:i:");
         o.append(buf);
     }
-    if(print_yt_ && !threeN) {
+    if(print_yt_ && !twoN) {
         // YT:Z: String representing alignment type
         WRITE_SEP();
         flags.printYT(o);
@@ -1618,7 +1618,7 @@ const
         o.append("ZS:i:");
         o.append(buf);
     }
-    if(print_yt_&& !threeN) {
+    if(print_yt_&& !twoN) {
         // YT:Z: String representing alignment type
         WRITE_SEP();
         flags.printYT(o);

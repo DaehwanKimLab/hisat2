@@ -2,7 +2,7 @@
  * Copyright 2015, Daehwan Kim <infphilo@gmail.com>
  *
  * This file is part of HISAT 2.
- * This file is edited by Yun (Leo) Zhang for HISAT-3N.
+ * This file is edited by Yun (Leo) Zhang for HISAT-2N.
  *
  * HISAT 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,7 +68,7 @@ static EList<string> mates1;  // mated reads (first mate)
 static EList<string> mates2;  // mated reads (second mate)
 static EList<string> mates12; // mated reads (1st/2nd interleaved in 1 file)
 static string adjIdxBase;
-static string adjIdxBases_3N[2];
+static string adjIdxBases_2N;
 bool gColor;              // colorspace (not supported)
 int gVerbose;             // be talkative
 static bool startVerbose; // be talkative at startup
@@ -274,7 +274,7 @@ static bool avoid_pseudogene;
 static EList<string> sra_accs;
 #endif
 
-static string bt2indexs[2];      // read Bowtie 2 index from files with this prefix
+static string bt2index;      // read Bowtie 2 index from files with this prefix
 static EList<pair<int, string> > extra_opts;
 static size_t extra_opts_cur;
 
@@ -302,13 +302,13 @@ static bool repeat;
 static bool use_repeat_index;
 static EList<size_t> readLens;
 
-// 3N variable
-bool threeN = false; // indicator for 3N mode.
+// 2N variable
+bool twoN = false; // indicator for 2N mode.
 char convertedFrom; // the nucleotide is replaced by others in sample preparation protocol. use in + strand.
 char convertedTo;   // the nucleotide to others in sample preparation protocol. use in + strand.
 char convertedToComplement; // the complement of convertedFrom. use in - strand.
 char convertedFromComplement; // the complement of convertedTo. use in - strand.
-vector<ht2_handle_t> repeatHandles; // the 2 repeat handles helps expand the repeat alignment information. 0 for + strand. 1 for - strand.
+ht2_handle_t repeatHandle; // the handle helps expand the repeat alignment information.
 struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's index for repeat alignment.
 int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
 bool uniqueOutputOnly; // only output the unique alignment result.
@@ -320,9 +320,8 @@ static void resetOptions() {
 	mates1.clear();
 	mates2.clear();
 	mates12.clear();
-    adjIdxBase             = "";
-	adjIdxBases_3N[0]	    = "";
-    adjIdxBases_3N[1]	    = "";
+    adjIdxBase              = "";
+	adjIdxBases_2N	        = "";
 	gColor                  = false;
 	gVerbose                = 0;
 	startVerbose			= 0;
@@ -488,8 +487,8 @@ static void resetOptions() {
 	defaultPreset      = "sensitive%LOCAL%"; // default preset; applied immediately
 	extra_opts.clear();
 	extra_opts_cur = 0;
-	bt2indexs[0].clear();        // read Bowtie 2 index from files with this prefix
-    bt2indexs[1].clear();
+	bt2index.clear();        // read Bowtie 2 index from files with this prefix
+
 	ignoreQuals = false;     // all mms incur same penalty, regardless of qual
 	wrapper.clear();         // type of wrapper script, so we can print correct usage
 	queries.clear();         // list of query files
@@ -553,7 +552,7 @@ static void resetOptions() {
     readLens.clear();
 
     refNameMap = NULL;
-    threeN = false;
+    twoN = false;
     repeatLimit = 1000;
     uniqueOutputOnly = false;
 }
@@ -906,9 +905,9 @@ static void printUsage(ostream& out) {
 	    << "  --norc             do not align reverse-complement version of read (off)" << endl
         << "  --no-repeat-index  do not use repeat index" << endl
         << endl
-        << " 3N-Alignment:" << endl
+        << " 2N-Alignment:" << endl
         << "  --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (C,T)" << endl
-        << "  --no-base-change            run hisat-3n as regular hisat2 (off)" << endl
+        << "  --no-base-change            run hisat-2n as regular hisat2 (off)" << endl
         << "  --repeat-limit <int>        maximum number of repeat will be expanded for repeat alignment (1000)" << endl
         << "  --unique-only               only output the reads have unique alignment (off)" << endl
 		<< endl
@@ -1468,7 +1467,7 @@ static void parseOption(int next_option, const char *arg) {
 		case ARG_1MM_UPFRONT_NO:   do1mmUpFront   = false; break;
 		case ARG_1MM_MINLEN:       do1mmMinLen = parse<size_t>(arg); break;
 		case ARG_NOISY_HPOLY: noisyHpolymer = true; break;
-		case 'x' : bt2indexs[0] = arg; break;
+		case 'x' : bt2index = arg; break;
 		case ARG_PRESET_VERY_FAST_LOCAL: localAlign = true;
 		case ARG_PRESET_VERY_FAST: {
 			presetList.push_back("very-fast%LOCAL%"); break;
@@ -1825,15 +1824,15 @@ static void parseOption(int next_option, const char *arg) {
                      << "arguments to --base-change option, got " << args.size() << endl;
                 throw 1;
             }
-            threeN = true;
+            twoN = true;
             convertedFrom = toupper(args[0][0]);
             convertedTo = toupper(args[1][0]);
             convertedFromComplement = asc2dnacomp[convertedFrom];
             convertedToComplement   = asc2dnacomp[convertedTo];
-            asc2dna_3N[0]['C'] = 3;
-            asc2dna_3N[0]['c'] = 3;
-            asc2dna_3N[1]['G'] = 0;
-            asc2dna_3N[1]['g'] = 0;
+            asc2dna_2N['C'] = 3;
+            asc2dna_2N['c'] = 3;
+            asc2dna_2N['G'] = 0;
+            asc2dna_2N['g'] = 0;
             break;
         }
         case ARG_REPEAT_LIMIT: {
@@ -2078,35 +2077,35 @@ static ALTDB<index_t>*                   altdb;
 static RepeatDB<index_t>*                repeatdb;
 static ALTDB<index_t>*                   raltdb;
 
-static ALTDB<index_t> *altdbs_3N[2];
-static RepeatDB<index_t> *repeatdbs_3N[2];
-static ALTDB<index_t> *raltdbs_3N[2];
+static ALTDB<index_t> *altdbs_2N;
+static RepeatDB<index_t> *repeatdbs_2N;
+static ALTDB<index_t> *raltdbs_2N;
 static TranscriptomePolicy*              multiseed_tpol;
 static GraphPolicy*                      gpol;
 
 
-class reference3N {
+class reference2N {
 public:
-    const HGFM<index_t>* multiseed_gfm[2];
-    const RFM<index_t>* multiseed_rgfm[2];
-    const BitPairReference* multiseed_rrefs[2];
+    const HGFM<index_t>* multiseed_gfm;
+    const RFM<index_t>* multiseed_rgfm;
+    const BitPairReference* multiseed_rrefs;
 
-    reference3N() {
+    reference2N() {
 
     }
 
-    void load(EList<HGFM<index_t>* >& gfms_3N,
-              RFM<index_t>* rgfms_3N[2],
-              BitPairReference* rrefss[2]) {
-        for (int i = 0; i < 2; i++) {
-            multiseed_gfm[i] = gfms_3N[i];
-            multiseed_rgfm[i] = rgfms_3N[i];
-            multiseed_rrefs[i] = rrefss[i];
-        }
+    void load(HGFM<index_t>* & gfms_2N,
+              RFM<index_t>* rgfms_2N,
+              BitPairReference* rrefss) {
+
+        multiseed_gfm = gfms_2N;
+        multiseed_rgfm = rgfms_2N;
+        multiseed_rrefs = rrefss;
+
     }
 };
 
-reference3N ref3N;
+reference2N ref2N;
 
 /**
  * Metrics for measuring the work done by the outer read alignment
@@ -3243,9 +3242,8 @@ static inline void printEEScoreMsg(
 static void multiseedSearchWorker_hisat2(void *vp) {
 	int tid = *((int*)vp);
 
-    if (threeN) {
-        assert(ref3N.multiseed_gfm[0] != NULL);
-        assert(ref3N.multiseed_gfm[1] != NULL);
+    if (twoN) {
+        assert(ref2N.multiseed_gfm != NULL);
     } else {
         assert(multiseed_gfm != NULL);
     }
@@ -3262,16 +3260,16 @@ static void multiseedSearchWorker_hisat2(void *vp) {
     AlnSink<index_t>&                msink    = *multiseed_msink;
     OutFileBuf*                      metricsOfb = multiseed_metricsOfb;
 
-    // for Hisat-3N
-    const HGFM<index_t>* gfm_3N[2];
-    const RFM<index_t>* rgfm_3N[2];
-    const BitPairReference* rref_3N[2];
+    // for Hisat-2N
+    const HGFM<index_t>* gfm_2N;
+    const RFM<index_t>* rgfm_2N;
+    const BitPairReference* rref_2N;
 
-    for (int i = 0; i < 2; i++) {
-        gfm_3N[i] = ref3N.multiseed_gfm[i];
-        rgfm_3N[i] = ref3N.multiseed_rgfm[i];
-        rref_3N[i] = ref3N.multiseed_rrefs[i];
-    }
+
+    gfm_2N = ref2N.multiseed_gfm;
+    rgfm_2N = ref2N.multiseed_rgfm;
+    rref_2N = ref2N.multiseed_rrefs;
+
 
 	// Sinks: these are so that we can print tables encoding counts for
 	// events of interest on a per-read, per-seed, per-join, or per-SW
@@ -3307,8 +3305,8 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 	// Make a per-thread wrapper for the global MHitSink object.
 
     AlnSinkWrap<index_t>* msinkwrap;
-    if (threeN) {
-        msinkwrap = new AlnSinkWrap3N<index_t>(
+    if (twoN) {
+        msinkwrap = new AlnSinkWrap2N<index_t>(
                                             msink,         // global sink
                                             rp,            // reporting parameters
                                             *bmapq.get(),  // MAPQ calculator
@@ -3327,7 +3325,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                             thread_rids_mindist);
     }
 
-    SplicedAligner<index_t, local_index_t> splicedAligner(threeN? *gfm_3N[0]: gfm,
+    SplicedAligner<index_t, local_index_t> splicedAligner(twoN? *gfm_2N: gfm,
                                                           anchorStop,
                                                           thread_rids_mindist);
 	SwAligner sw;
@@ -3473,16 +3471,16 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 			}
 			// Try to align this read
 			int mappingCycle = 0;
-            bool gNofw3N = false;
-            bool gNorc3N = false;
-            // for threeN (3N) mode, we need to map the read 4 times. for regular mode, only 1 time.
-			while(retry || (threeN ? (mappingCycle < 4) : (mappingCycle < 1)) ) {
+            bool gNofw2N = false;
+            bool gNorc2N = false;
+            // for twoN (2N) mode, we need to map the read 2 times. for regular mode, only 1 time.
+			while(retry || (twoN ? (mappingCycle < 2) : (mappingCycle < 1)) ) {
 
                 msinkwrap->resetInit_();
-                if (threeN) {
-                    ps->changePlan3N(mappingCycle);
-                    gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
-                    gNofw3N = !gNorc3N;
+                if (twoN) {
+                    ps->changePlan2N(mappingCycle);
+                    gNorc2N = mappingCycle == twoN_FW;
+                    gNofw2N = !gNorc2N;
                 }
 				retry = false;
 				assert_eq(ps->bufa().color, false);
@@ -3582,11 +3580,11 @@ static void multiseedSearchWorker_hisat2(void *vp) {
 				// Calcualte nofw / no rc
 				bool nofw[2] = { false, false };
 				bool norc[2] = { false, false };
-				if (threeN) {
-                    nofw[0] = paired ? (gMate1fw ? gNofw3N : gNorc3N) : gNofw3N;
-                    norc[0] = paired ? (gMate1fw ? gNorc3N : gNofw3N) : gNorc3N;
-                    nofw[1] = paired ? (gMate2fw ? gNofw3N : gNorc3N) : gNofw3N;
-                    norc[1] = paired ? (gMate2fw ? gNorc3N : gNofw3N) : gNorc3N;
+				if (twoN) {
+                    nofw[0] = paired ? (gMate1fw ? gNofw2N : gNorc2N) : gNofw2N;
+                    norc[0] = paired ? (gMate1fw ? gNorc2N : gNofw2N) : gNorc2N;
+                    nofw[1] = paired ? (gMate2fw ? gNofw2N : gNorc2N) : gNofw2N;
+                    norc[1] = paired ? (gMate2fw ? gNorc2N : gNofw2N) : gNorc2N;
 				} else {
                     nofw[0] = paired ? (gMate1fw ? gNofw : gNorc) : gNofw;
                     norc[0] = paired ? (gMate1fw ? gNorc : gNofw) : gNorc;
@@ -3682,11 +3680,11 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                 }
                 if(filt[0] || filt[1]) {
                     int ret;
-                    int threeN_index;
+                    //int threeN_index;
                     bool useRepeat;
 
-                    if (threeN) {
-                        threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
+                    if (twoN) {
+                        //threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
                         useRepeat = paired ? (ps->bufa().length() >= 100) && (ps->bufb().length() >= 100) :
                                          ps->bufa().length() >= 80;
                     }
@@ -3696,13 +3694,13 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                             pepol,
                             *multiseed_tpol,
                             *gpol,
-                            threeN ? *gfm_3N[threeN_index] : gfm,
-                            threeN ?(useRepeat ? rgfm_3N[threeN_index] : NULL) : rgfm,
-                            threeN ? *altdbs_3N[threeN_index] : *altdb,
-                            threeN ? *repeatdbs_3N[threeN_index] : *repeatdb,
-                            threeN ? *raltdbs_3N[threeN_index] : *raltdb,
+                            twoN ? *gfm_2N : gfm,
+                            twoN ?(useRepeat ? rgfm_2N : NULL) : rgfm,
+                            twoN ? *altdbs_2N : *altdb,
+                            twoN ? *repeatdbs_2N : *repeatdb,
+                            twoN ? *raltdbs_2N : *raltdb,
                             ref,
-                            threeN ? rref_3N[threeN_index] : rref,
+                            twoN ? rref_2N : rref,
                             sw,
                             *ssdb,
                             wlm,
@@ -3816,9 +3814,9 @@ static void multiseedSearch(
                             GraphPolicy& gp,
                             PairedPatternSource& patsrc,            // pattern source
                             AlnSink<index_t>& msink,                // hit sink
-                            EList<HGFM<index_t>* > gfms_3N,           // 3N index of original text
-                            RFM<index_t>* rgfms_3N[2],                 // 3N index of repeat sequences
-                            BitPairReference* rrefss[2],            // 3N repeat reference
+                            HGFM<index_t>*  gfms_2N,           // 2N index of original text
+                            RFM<index_t>* rgfms_2N,                 // 2N index of repeat sequences
+                            BitPairReference* rrefss,            // 2N repeat reference
                             HGFM<index_t>* gfm,           // index of original text
                             RFM<index_t>* rgfm,           // index of repeat sequences
                             BitPairReference* refs,       // base reference
@@ -3832,8 +3830,8 @@ static void multiseedSearch(
     gpol                   = &gp;
 	multiseed_metricsOfb   = metricsOfb;
     multiseed_refs         = refs;
-	if (threeN) {
-        ref3N.load(gfms_3N, rgfms_3N, rrefss);
+	if (twoN) {
+        ref2N.load(gfms_2N, rgfms_2N, rrefss);
 	} else {
         multiseed_gfm          = gfm;
         multiseed_rgfm         = rgfm;
@@ -3872,7 +3870,7 @@ extern void initializeCntBit();
 template<typename TStr>
 static void driver(
 	const char * type,
-	const string bt2indexBases[2],
+	const string bt2indexBase,
 	const string& outfile)
 {
 	if(gVerbose || startVerbose)  {
@@ -3880,7 +3878,7 @@ static void driver(
 	}
 
 	if (gVerbose || startVerbose) {
-	    cerr << "Running in " << ((threeN) ? "3N" : "Regular") << " Mode" << endl;
+	    cerr << "Running in " << ((twoN) ? "2N" : "Regular") << " Mode" << endl;
 	}
     
     initializeCntLut();
@@ -3942,36 +3940,97 @@ static void driver(
 		cerr << "About to initialize fw GFM: "; logTime(cerr, true);
 	}
 
-    // for 3N
-    if (threeN) {
-        for (int i = 0; i < 2; i++) {
-            altdbs_3N[i] = new ALTDB<index_t>();
-            repeatdbs_3N[i] = new RepeatDB<index_t>();
-            raltdbs_3N[i] = new ALTDB<index_t>();
-        }
+    // for 2N
+    if (twoN) {
+        altdbs_2N = new ALTDB<index_t>();
+        repeatdbs_2N = new RepeatDB<index_t>();
+        raltdbs_2N = new ALTDB<index_t>();
     }
 
-    EList<HGFM<index_t>* >gfms_3N;
-    RFM<index_t>* rgfms_3N[2];
-    for (int i = 0; i < 2; i++) {
-        rgfms_3N[i] = NULL;
-    }
-    bool rep_index_exists_3N[2]{false};
+    HGFM<index_t>* gfms_2N;
+    RFM<index_t>* rgfms_2N = NULL;
+
+    bool rep_index_exists_2N{false};
     bool rep_index_exists = false;
-    string rep_adjIdxBase_3N[2];
+    string rep_adjIdxBase_2N;
     string rep_adjIdxBase;
 
     HGFM<index_t>* gfm;
     RFM<index_t>* rgfm = NULL;
 
-    if (threeN) {
-        for (int j = 0; j < 2; j++) {
-            adjIdxBases_3N[j] = adjustEbwtBase(argv0, bt2indexBases[j], gVerbose);
-            HGFM<index_t, local_index_t> *tmp_gfm = new HGFM<index_t, local_index_t>(
-                    adjIdxBases_3N[j],
-                    altdbs_3N[j],
-                    NULL,
-                    NULL,
+    if (twoN) {
+        adjIdxBases_2N = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
+        gfms_2N = new HGFM<index_t, local_index_t>(
+                adjIdxBases_2N,
+                altdbs_2N,
+                NULL,
+                NULL,
+                -1,       // fw index
+                true,     // index is for the forward direction
+                /* overriding: */ offRate,
+                0, // amount to add to index offrate or <= 0 to do nothing
+                useMm,    // whether to use memory-mapped files
+                useShmem, // whether to use shared memory
+                mmSweep,  // sweep memory-mapped files
+                !noRefNames, // load names?
+                true,        // load SA sample?
+                true,        // load ftab?
+                true,        // load rstarts?
+                !no_spliced_alignment, // load splice sites?
+                gVerbose, // whether to be talkative
+                startVerbose, // talkative during initialization
+                false /*passMemExc*/,
+                sanityCheck,
+                use_haplotype); //use haplotypes?
+
+        //gfms_2N.push_back(tmp_gfm);
+
+        if(sanityCheck && !os.empty()) {
+            // Sanity check number of patterns and pattern lengths in GFM
+            // against original strings
+            assert_eq(os.size(), gfms_2N->nPat());
+
+            for(size_t i = 0; i < os.size(); i++) {
+                assert_eq(os[i].length(), gfms_2N->plen()[i]);
+            }
+        }
+        if(sanityCheck && !os.empty()) {
+            gfms_2N->loadIntoMemory(
+                    -1, // fw index
+                    true, // load SA sample
+                    true, // load ftab
+                    true, // load rstarts
+                    !noRefNames,
+                    startVerbose);
+            gfms_2N->checkOrigs(os, false);
+            gfms_2N->evictFromMemory();
+        }
+        {
+            // Load the other half of the index into memory
+            assert(!gfms_2N->isInMemory());
+            Timer _t(cerr, "Time loading forward index: ", timing);
+            gfms_2N->loadIntoMemory(
+                    -1, // not the reverse index
+                    true,         // load SA samp? (yes, need forward index's SA samp)
+                    true,         // load ftab (in forward index)
+                    true,         // load rstarts (in forward index)
+                    !noRefNames,  // load names?
+                    startVerbose);
+        }
+
+
+        rep_adjIdxBase_2N = adjIdxBases_2N + ".rep";
+        {
+            std::ifstream infile((rep_adjIdxBase_2N + ".1." + gfm_ext.c_str()).c_str());
+            rep_index_exists_2N = infile.good();
+        }
+        string test = rep_adjIdxBase_2N + ".1." + gfm_ext.c_str();
+        if(rep_index_exists_2N && use_repeat_index) {
+            rgfms_2N = new RFM<index_t>(
+                    rep_adjIdxBase_2N,
+                    raltdbs_2N,
+                    repeatdbs_2N,
+                    &readLens,
                     -1,       // fw index
                     true,     // index is for the forward direction
                     /* overriding: */ offRate,
@@ -3988,142 +4047,75 @@ static void driver(
                     startVerbose, // talkative during initialization
                     false /*passMemExc*/,
                     sanityCheck,
-                    use_haplotype); //use haplotypes?
+                    false); //use haplotypes?
 
-            gfms_3N.push_back(tmp_gfm);
-
+            // CP to do
+#if 0
             if(sanityCheck && !os.empty()) {
-                // Sanity check number of patterns and pattern lengths in GFM
-                // against original strings
-                assert_eq(os.size(), gfms_3N[j]->nPat());
-
-                for(size_t i = 0; i < os.size(); i++) {
-                    assert_eq(os[i].length(), gfms_3N[j]->plen()[i]);
-                }
-            }
-            if(sanityCheck && !os.empty()) {
-                gfms_3N[j]->loadIntoMemory(
-                        -1, // fw index
-                        true, // load SA sample
-                        true, // load ftab
-                        true, // load rstarts
-                        !noRefNames,
-                        startVerbose);
-                gfms_3N[j]->checkOrigs(os, false);
-                gfms_3N[j]->evictFromMemory();
-            }
+    // Sanity check number of patterns and pattern lengths in GFM
+    // against original strings
+    assert_eq(os.size(), gfm.nPat());
+    for(size_t i = 0; i < os.size(); i++) {
+        assert_eq(os[i].length(), rgfm->plen()[i]);
+    }
+}
+// Sanity-check the restored version of the GFM
+if(sanityCheck && !os.empty()) {
+    rgfm->loadIntoMemory(
+                       -1, // fw index
+                       true, // load SA sample
+                       true, // load ftab
+                       true, // load rstarts
+                       !noRefNames,
+                       startVerbose);
+    rgfm->checkOrigs(os, false);
+    rgfm->evictFromMemory();
+}
+#endif
             {
                 // Load the other half of the index into memory
-                assert(!gfms_3N[j]->isInMemory());
+                assert(!rgfms_2N->isInMemory());
                 Timer _t(cerr, "Time loading forward index: ", timing);
-                gfms_3N[j]->loadIntoMemory(
+                rgfms_2N->loadIntoMemory(
                         -1, // not the reverse index
                         true,         // load SA samp? (yes, need forward index's SA samp)
                         true,         // load ftab (in forward index)
                         true,         // load rstarts (in forward index)
                         !noRefNames,  // load names?
                         startVerbose);
+
+                repeatdbs_2N->construct(gfms_2N->rstarts(), gfms_2N->nFrag());
             }
 
+            if (twoN) {
+                ht2_option_t option;
+                ht2_init_options(&option);
 
-            rep_adjIdxBase_3N[j] = adjIdxBases_3N[j] + ".rep";
-            {
-                std::ifstream infile((rep_adjIdxBase_3N[j] + ".1." + gfm_ext.c_str()).c_str());
-                rep_index_exists_3N[j] = infile.good();
-            }
-            string test = rep_adjIdxBase_3N[j] + ".1." + gfm_ext.c_str();
-            if(rep_index_exists_3N[j] && use_repeat_index) {
-                rgfms_3N[j] = new RFM<index_t>(
-                        rep_adjIdxBase_3N[j],
-                        raltdbs_3N[j],
-                        repeatdbs_3N[j],
-                        &readLens,
-                        -1,       // fw index
-                        true,     // index is for the forward direction
-                        /* overriding: */ offRate,
-                        0, // amount to add to index offrate or <= 0 to do nothing
-                        useMm,    // whether to use memory-mapped files
-                        useShmem, // whether to use shared memory
-                        mmSweep,  // sweep memory-mapped files
-                        !noRefNames, // load names?
-                        true,        // load SA sample?
-                        true,        // load ftab?
-                        true,        // load rstarts?
-                        !no_spliced_alignment, // load splice sites?
-                        gVerbose, // whether to be talkative
-                        startVerbose, // talkative during initialization
-                        false /*passMemExc*/,
-                        sanityCheck,
-                        false); //use haplotypes?
+                option.altdb = altdbs_2N;
+                option.raltdb = raltdbs_2N;
+                option.repeatdb = repeatdbs_2N;
+                option.gfm = gfms_2N;
+                option.rgfm = rgfms_2N;
 
-                // CP to do
-#if 0
-                if(sanityCheck && !os.empty()) {
-        // Sanity check number of patterns and pattern lengths in GFM
-        // against original strings
-        assert_eq(os.size(), gfm.nPat());
-        for(size_t i = 0; i < os.size(); i++) {
-            assert_eq(os[i].length(), rgfm->plen()[i]);
-        }
-    }
-    // Sanity-check the restored version of the GFM
-    if(sanityCheck && !os.empty()) {
-        rgfm->loadIntoMemory(
-                           -1, // fw index
-                           true, // load SA sample
-                           true, // load ftab
-                           true, // load rstarts
-                           !noRefNames,
-                           startVerbose);
-        rgfm->checkOrigs(os, false);
-        rgfm->evictFromMemory();
-    }
-#endif
-                {
-                    // Load the other half of the index into memory
-                    assert(!rgfms_3N[j]->isInMemory());
-                    Timer _t(cerr, "Time loading forward index: ", timing);
-                    rgfms_3N[j]->loadIntoMemory(
-                            -1, // not the reverse index
-                            true,         // load SA samp? (yes, need forward index's SA samp)
-                            true,         // load ftab (in forward index)
-                            true,         // load rstarts (in forward index)
-                            !noRefNames,  // load names?
-                            startVerbose);
+                repeatHandle = ht2_init(adjIdxBases_2N.c_str(), &option);
 
-                    repeatdbs_3N[j]->construct(gfms_3N[j]->rstarts(), gfms_3N[j]->nFrag());
-                }
-
-                if (threeN) {
-                    ht2_option_t option;
-                    ht2_init_options(&option);
-
-                    option.altdb = altdbs_3N[j];
-                    option.raltdb = raltdbs_3N[j];
-                    option.repeatdb = repeatdbs_3N[j];
-                    option.gfm = gfms_3N[j];
-                    option.rgfm = rgfms_3N[j];
-
-                    ht2_handle_t handle = ht2_init(adjIdxBases_3N[j].c_str(), &option);
-
-                    repeatHandles.push_back(handle);
-                    if (refNameMap == NULL) {
-                        ht2_index_getrefnames(repeatHandles[0], &refNameMap);
-                    }
+                if (refNameMap == NULL) {
+                    ht2_index_getrefnames(repeatHandle, &refNameMap);
                 }
             }
-
-
-            if(!saw_k) {
-                if(gfms_3N[j]->gh().linearFM()) khits = 5;
-                else                    khits = 10;
-            }
         }
+
+
+        if(!saw_k) {
+            if(gfms_2N->gh().linearFM()) khits = 5;
+            else                    khits = 10;
+        }
+
     } else {
         altdb = new ALTDB<index_t>();
         repeatdb = new RepeatDB<index_t>();
         raltdb = new ALTDB<index_t>();
-        adjIdxBase = adjustEbwtBase(argv0, bt2indexBases[0], gVerbose);
+        adjIdxBase = adjustEbwtBase(argv0, bt2indexBase, gVerbose);
         gfm = new HGFM<index_t, local_index_t>(
                 adjIdxBase,
                 altdb,
@@ -4251,7 +4243,7 @@ static void driver(
             if(gfm->gh().linearFM()) khits = 5;
             else                    khits = 10;
         }
-    } // else threeN
+    } // else twoN
 
 	OutputQueue oq(
 		*fout,                   // out file buffer
@@ -4293,12 +4285,12 @@ static void driver(
                    &penNoncanIntronLen);  // penalty as to intron length
 
         EList<size_t> reflens;
-        // for HISAT-3N
-        EList<string> refnames_3N[2];
-        EList<size_t> replens_3N[2];
-        EList<string> repnames_3N[2];
-        EList<size_t> empty_replens_3N[2];
-        EList<string> empty_repnames_3N[2];
+        // for HISAT-2N
+        EList<string> refnames_2N;
+        EList<size_t> replens_2N;
+        EList<string> repnames_2N;
+        EList<size_t> empty_replens_2N;
+        EList<string> empty_repnames_2N;
 
         //for regular hisat2
         EList<string> refnames;
@@ -4309,36 +4301,36 @@ static void driver(
         EList<string> empty_repnames;
 
 
-		if (threeN) {
-            for(size_t i = 0; i < gfms_3N[0]->nPat(); i++) {
-                reflens.push_back(gfms_3N[0]->plen()[i]);
+		if (twoN) {
+            for(size_t i = 0; i < gfms_2N->nPat(); i++) {
+                reflens.push_back(gfms_2N->plen()[i]);
             }
-            for (int j = 0; j < 2; j++) {
-                readEbwtRefnames<index_t>(adjIdxBases_3N[j], refnames_3N[j]);
-                if (rep_index_exists_3N[j] && use_repeat_index) {
-                    rgfms_3N[j]->getReferenceNames(repnames_3N[j]);
-                    rgfms_3N[j]->getReferenceLens(replens_3N[j]);
-                }
-                if(rmChrName && addChrName) {
-                    cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
-                    throw 1;
-                }
-                if(rmChrName) {
-                    for(size_t i = 0; i < refnames_3N[j].size(); i++) {
-                        string& refname = refnames_3N[j][i];
-                        if(refname.find("chr") == 0) {
-                            refname = refname.substr(3);
-                        }
-                    }
-                } else if(addChrName) {
-                    for(size_t i = 0; i < refnames_3N[j].size(); i++) {
-                        string& refname = refnames_3N[j][i];
-                        if(refname.find("chr") != 0) {
-                            refname = string("chr") + refname;
-                        }
+
+            readEbwtRefnames<index_t>(adjIdxBases_2N, refnames_2N);
+            if (rep_index_exists_2N && use_repeat_index) {
+                rgfms_2N->getReferenceNames(repnames_2N);
+                rgfms_2N->getReferenceLens(replens_2N);
+            }
+            if(rmChrName && addChrName) {
+                cerr << "Error: --remove-chrname and --add-chrname cannot be used at the same time" << endl;
+                throw 1;
+            }
+            if(rmChrName) {
+                for(size_t i = 0; i < refnames_2N.size(); i++) {
+                    string& refname = refnames_2N[i];
+                    if(refname.find("chr") == 0) {
+                        refname = refname.substr(3);
                     }
                 }
+            } else if(addChrName) {
+                for(size_t i = 0; i < refnames_2N.size(); i++) {
+                    string& refname = refnames_2N[i];
+                    if(refname.find("chr") != 0) {
+                        refname = string("chr") + refname;
+                    }
+                }
             }
+
 		} else {
             readEbwtRefnames<index_t>(adjIdxBase, refnames);
             for(size_t i = 0; i < gfm->nPat(); i++) {
@@ -4370,10 +4362,10 @@ static void driver(
 		}
 
         SamConfig<index_t> samc(
-                threeN ? refnames_3N[0]: refnames,               // reference sequence names
+                twoN ? refnames_2N: refnames,               // reference sequence names
                 reflens,                // reference sequence lengths
-                threeN?(repeat ? repnames_3N[0] : empty_repnames_3N[0]): (repeat ? repnames : empty_repnames), // repeat sequence names
-                threeN? (repeat ? replens_3N[0] : empty_replens_3N[0]): (repeat ? replens : empty_replens),   // repeat sequence lengths
+                twoN?(repeat ? repnames_2N : empty_repnames_2N): (repeat ? repnames : empty_repnames), // repeat sequence names
+                twoN? (repeat ? replens_2N : empty_replens_2N): (repeat ? replens : empty_replens),   // repeat sequence lengths
                 samTruncQname,          // whether to truncate QNAME to 255 chars
                 samOmitSecSeqQual,      // omit SEQ/QUAL for 2ndary alignments?
                 samNoUnal,              // omit unaligned-read records?
@@ -4435,7 +4427,7 @@ static void driver(
         Timer *_tRef = new Timer(cerr, "Time loading reference: ", timing);
         refs = auto_ptr<BitPairReference>(
                 new BitPairReference(
-                        threeN ? adjIdxBases_3N[0] : adjIdxBase,
+                        twoN ? adjIdxBases_2N : adjIdxBase,
                         NULL,
                         false,
                         sanityCheck,
@@ -4454,28 +4446,26 @@ static void driver(
 
 
         
-        BitPairReference* rrefss[2] = {NULL, };
+        BitPairReference* rrefss = {NULL};
         BitPairReference* rrefs = NULL;
 
-        if (threeN) {
-            for (int j = 0; j < 2; j++) {
-                if (rep_index_exists_3N[j] && use_repeat_index) {
-                    const EList<uint8_t> &included = rgfms_3N[j]->getRepeatIncluded();
-                    rrefss[j] = new BitPairReference(
-                            rep_adjIdxBase_3N[j],
-                            &included,
-                            false,
-                            sanityCheck,
-                            NULL,
-                            NULL,
-                            false,
-                            useMm,
-                            useShmem,
-                            mmSweep,
-                            gVerbose,
-                            startVerbose);
-                    if (!rrefss[j]->loaded()) throw 1;
-                }
+        if (twoN) {
+            if (rep_index_exists_2N && use_repeat_index) {
+                const EList<uint8_t> &included = rgfms_2N->getRepeatIncluded();
+                rrefss = new BitPairReference(
+                        rep_adjIdxBase_2N,
+                        &included,
+                        false,
+                        sanityCheck,
+                        NULL,
+                        NULL,
+                        false,
+                        useMm,
+                        useShmem,
+                        mmSweep,
+                        gVerbose,
+                        startVerbose);
+                if (!rrefss->loaded()) throw 1;
             }
         } else {
             if(rep_index_exists && use_repeat_index) {
@@ -4511,19 +4501,19 @@ static void driver(
         
         GraphPolicy gpol(max_alts_tried,
                          use_haplotype,
-                         (threeN ? altdbs_3N[0]->haplotypes().size() : altdb->haplotypes().size()) > 0 && use_haplotype,
+                         (twoN ? altdbs_2N->haplotypes().size() : altdb->haplotypes().size()) > 0 && use_haplotype,
                          enable_codis);
         
         init_junction_prob();
         bool write = novelSpliceSiteOutfile != "" || useTempSpliceSite;
-        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdbs_3N[0]->hasSpliceSites();
+        bool read = knownSpliceSiteInfile != "" || novelSpliceSiteInfile != "" || useTempSpliceSite || altdbs_2N->hasSpliceSites();
         ssdb = new SpliceSiteDB(
                                 *(refs.get()),
-                                threeN ? refnames_3N[0] : refnames,
+                                twoN ? refnames_2N : refnames,
                                 nthreads > 1, // thread-safe
                                 write, // write?
                                 read);  // read?
-        ssdb->read(threeN ? *gfms_3N[0] : *gfm, threeN ? altdbs_3N[0]->alts() : altdb->alts());
+        ssdb->read(twoN ? *gfms_2N : *gfm, twoN ? altdbs_2N->alts() : altdb->alts());
         if(knownSpliceSiteInfile != "") {
             ifstream ssdb_file(knownSpliceSiteInfile.c_str(), ios::in);
             if(ssdb_file.is_open()) {
@@ -4543,17 +4533,17 @@ static void driver(
 
 		switch(outType) {
 			case OUTPUT_SAM: {
-			    if (threeN) {
-                    mssink = new AlnSink3NSam<index_t>(
+			    if (twoN) {
+                    mssink = new AlnSink2NSam<index_t>(
                             oq,           // output queue
                             samc,         // settings & routines for SAM output
-                            refnames_3N[0],     // reference names
-                            repnames_3N[0],     // repeat names
+                            refnames_2N,     // reference names
+                            repnames_2N,     // repeat names
                             gQuiet,       // don't print alignment summary at end
                             nthreads,
                             refs.get(),
                             no_spliced_alignment,
-                            altdbs_3N[0],
+                            altdbs_2N,
                             ssdb);
 			    } else {
                     mssink = new AlnSinkSam<index_t>(
@@ -4595,20 +4585,18 @@ static void driver(
                         gpol,
                         *patsrc, // pattern source
                         *mssink, // hit sink
-                        gfms_3N,     // 3N BWT
-                        rgfms_3N,    // 3N
-                        rrefss,   // 3N
+                        gfms_2N,     // 2N BWT
+                        rgfms_2N,    // 2N
+                        rrefss,   // 2N
                         gfm,     // BWT
                         rgfm,
                         refs.get(),
                         rrefs,
                         metricsOfb);
         // Evict any loaded indexes from memory
-		if (threeN) {
-            for (int j = 0; j < 2; j++) {
-                if(gfms_3N[j]->isInMemory()) {
-                    gfms_3N[j]->evictFromMemory();
-                }
+		if (twoN) {
+            if(gfms_2N->isInMemory()) {
+                gfms_2N->evictFromMemory();
             }
 		} else {
             if(gfm->isInMemory()) {
@@ -4656,21 +4644,18 @@ static void driver(
 		delete mssink;
         delete ssdb;
 		delete metricsOfb;
-		if (threeN) {
-            for (int i = 0; i < 2; i++) {
-                if(rep_index_exists_3N[i] && use_repeat_index) {
-                    delete rgfms_3N[i];
-                    delete rrefss[i];
-                    delete repeatdbs_3N[i];
-                    delete raltdbs_3N[i];
-                }
-                delete gfms_3N[i];
-                delete altdbs_3N[i];
+		if (twoN) {
+            if(rep_index_exists_2N && use_repeat_index) {
+                delete rgfms_2N;
+                delete rrefss;
+                delete repeatdbs_2N;
+                delete raltdbs_2N;
             }
-            if(rep_index_exists_3N[0] && use_repeat_index){
-                for (int k = 0; k < 2; k++) {
-                    ht2_close(repeatHandles[k]);
-                }
+            delete gfms_2N;
+            delete altdbs_2N;
+
+            if(rep_index_exists_2N && use_repeat_index){
+                ht2_close(repeatHandle);
             }
 		} else {
             delete altdb;
@@ -4737,18 +4722,16 @@ int hisat2(int argc, const char **argv) {
 			}
 
 			// Get index basename (but only if it wasn't specified via --index)
-            if(bt2indexs[0].empty()) {
+            if(bt2index.empty()) {
                 if(optind >= argc) {
                     cerr << "No index, query, or output file specified!" << endl;
                     printUsage(cerr);
                     return 1;
                 }
-                bt2indexs[0] = argv[optind++];
+                bt2index = argv[optind++];
             }
-            if (threeN) {
-                bt2indexs[1] = bt2indexs[0];
-                bt2indexs[0] += ".3n.1";
-                bt2indexs[1] += ".3n.2";
+            if (twoN) {
+                bt2index += ".2n";
             }
 
 			// Get query filename
@@ -4810,8 +4793,7 @@ int hisat2(int argc, const char **argv) {
 
 			// Optionally summarize
 			if(gVerbose) {
-				cout << "Input bt2 file: \"" << bt2indexs[0].c_str() << "\"" << endl;
-                cout << "Input bt2 file: \"" << bt2indexs[1].c_str() << "\"" << endl;
+				cout << "Input bt2 file: \"" << bt2index.c_str() << "\"" << endl;
 				cout << "Query inputs (DNA, " << file_format_names[format].c_str() << "):" << endl;
 				for(size_t i = 0; i < queries.size(); i++) {
 					cout << "  " << queries[i].c_str() << endl;
@@ -4833,7 +4815,7 @@ int hisat2(int argc, const char **argv) {
 				cout << "Press key to continue..." << endl;
 				getchar();
 			}
-			driver<SString<char> >("DNA", bt2indexs, outfile);
+			driver<SString<char> >("DNA", bt2index, outfile);
 		}
 		return 0;
 	} catch(std::exception& e) {

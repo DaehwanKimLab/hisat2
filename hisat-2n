@@ -19,9 +19,9 @@
 # along with HISAT 2.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# hisat-3n:
+# hisat-2n:
 #
-# A wrapper script for hisat-3n.  Provides various advantages over running
+# A wrapper script for hisat-2n.  Provides various advantages over running
 # hisat directly, including:
 #
 # 1. Handling compressed inputs
@@ -319,7 +319,7 @@ if ((scalar(@read_files) > 0)
 	}
 }
 
-# Check options for HISAT-3N
+# Check options for HISAT-2N
 # --base-change or --no-base-change
 # one of the two options must be set.
 if ($base_change_opt == 0 && $help == 0) {

@@ -1,27 +1,27 @@
 /*
  * Copyright 2020, Yun (Leo) Zhang <imzhangyun@gmail.com>
  *
- * This file is part of HISAT-3N.
+ * This file is part of HISAT-2N.
  *
- * HISAT-3N is free software: you can redistribute it and/or modify
+ * HISAT-2N is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * HISAT-3N is distributed in the hope that it will be useful,
+ * HISAT-2N is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HISAT-3N.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT-2N.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HISAT2_POSITION_3N_H
-#define HISAT2_POSITION_3N_H
+#ifndef HISAT2_POSITION_2N_H
+#define HISAT2_POSITION_2N_H
 
 #include "sstring.h"
-#include "alignment_3n.h"
+#include "alignment_2n.h"
 
 class Alignment;
 class RepeatMappingPosition;
@@ -341,5 +341,5 @@ public:
     }
 };
 
-#endif //HISAT2_POSITION_3N_H
+#endif //HISAT2_POSITION_2N_H
 

@@ -2565,7 +2565,7 @@ std::ostream& operator<< (std::ostream& os, const SStringFixed<T, S>& str) {
 extern uint8_t asc2dna[];
 extern uint8_t asc2col[];
 
-extern uint8_t asc2dna_3N[2][256];
+extern uint8_t asc2dna_2N[256];
 
 
 

@@ -35,7 +35,7 @@
 #include "gfm.h"
 #include "hgfm.h"
 #include "rfm.h"
-#include "alignment_3n.h"
+#include "alignment_2n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -87,10 +87,10 @@ static string repeat_info_fname;
 static string repeat_snp_fname;
 static string repeat_haplotype_fname;
 
-bool threeN = false;
+bool twoN = false;
 bool repeatIndex = false;
 
-ConvertMatrix3N baseChange;
+ConvertMatrix2N baseChange;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -130,7 +130,7 @@ static void resetOptions() {
     repeat_info_fname = "";
     repeat_snp_fname = "";
     repeat_haplotype_fname = "";
-    threeN = false;
+    twoN = false;
     repeatIndex = false;
 }
 
@@ -159,7 +159,7 @@ enum {
     ARG_REPEAT_INFO,
     ARG_REPEAT_SNP,
     ARG_REPEAT_HAPLOTYPE,
-    ARG_3N,
+    ARG_2N,
     ARG_REPEAT_INDEX
 };
 
@@ -209,7 +209,7 @@ static void printUsage(ostream& out) {
         << "    --repeat-snp <path>     Repeat snp file name" << endl
         << "    --repeat-haplotype <path>   Repeat haplotype file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
-	    << "    --3N                    build 3N index rather than standard hisat2 index" << endl
+	    << "    --2N                    build 2N index rather than standard hisat2 index" << endl
 	    << "    --repeat-index<int>-<int>[,<int>-<int>]  automatically build repeat database and repeat index, enter the minimum-maximum repeat length pairs (default: 100-300)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -267,7 +267,7 @@ static struct option long_options[] = {
 	{(char*)"reverse-each",   no_argument,       0,            ARG_REVERSE_EACH},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
-    {(char*)"3N",            no_argument,       0,            ARG_3N},
+    {(char*)"2N",            no_argument,       0,            ARG_2N},
     {(char*)"repeat-index",   no_argument, 0,            ARG_REPEAT_INDEX},
 	{(char*)0, 0, 0, 0} // terminator
 };
@@ -399,7 +399,7 @@ static void parseOptions(int argc, const char **argv) {
 				reverseEach = true;
 				break;
 			case ARG_NTOA: nsToAs = true; break;
-            case ARG_3N: threeN = true; break;
+            case ARG_2N: twoN = true; break;
             case ARG_REPEAT_INDEX: repeatIndex = true; break;
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -531,7 +531,7 @@ static void driver(
             filesWritten.push_back(outfile + ".3." + gfm_ext);
             filesWritten.push_back(outfile + ".4." + gfm_ext);
             sztot = BitPairReference::szsFromFasta(is, outfile, bigEndian, refparams, szs, sanityCheck);
-            if (threeN) {
+            if (twoN) {
                 // save the unchanged reference in .3.ht2 and .4.ht2
                 baseChange.restoreNormal();
                 EList<RefRecord> tmp_szs(MISC_CAT);
@@ -756,7 +756,7 @@ int hisat2_build(int argc, const char **argv) {
 		// Optionally summarize
 		if(verbose) {
 			cerr << "Settings:" << endl
-				 << "  Output files: \"" << outfile.c_str() << (threeN?".3n":"") << ".*." << gfm_ext << "\"" << endl
+				 << "  Output files: \"" << outfile.c_str() << (twoN?".2n":"") << gfm_ext << "\"" << endl
 				 << "  Line rate: " << lineRate << " (line is " << (1<<lineRate) << " bytes)" << endl
 				 << "  Lines per side: " << linesPerSide << " (side is " << ((1<<lineRate)*linesPerSide) << " bytes)" << endl
 				 << "  Offset rate: " << offRate << " (one in " << (1<<offRate) << ")" << endl
@@ -809,80 +809,75 @@ int hisat2_build(int argc, const char **argv) {
                 EList<string> parent_refnames;
                 string dummy_fname = "";
 
-                int nloop = threeN ? 2 : 1; // if threeN == true, nloop = 2. else one loop
-                for (int i = 0; i < nloop; i++) {
-                    string tag = "";
-                    if (threeN) {
-                        if (i == 0) {
-                            tag = ".3n.1";
-                            baseChange.convert('C', 'T');
-                        } else {
-                            tag = ".3n.2";
-                            baseChange.convert('G', 'A');
-                        }
-                    }
+                //int nloop = twoN ? 2 : 1; // if twoN == true, nloop = 2. else one loop
 
-                    driver<SString<char> >(infile,
-                                           infiles,
-                                           snp_fname,
-                                           ht_fname,
-                                           ss_fname,
-                                           exon_fname,
-                                           sv_fname,
+                string tag = "";
+                if (twoN) {
+                    tag = ".2n";
+                    baseChange.convert('C', 'T');
+                }
+
+                driver<SString<char> >(infile,
+                                       infiles,
+                                       snp_fname,
+                                       ht_fname,
+                                       ss_fname,
+                                       exon_fname,
+                                       sv_fname,
+                                       dummy_fname,
+                                       outfile + tag,
+                                       false,
+                                       REF_READ_FORWARD,
+                                       true, // create local indexes
+                                       NULL, // no parent szs
+                                       NULL, // no parent refnames
+                                       &parent_szs, // get parent szs
+                                       &parent_refnames); // get parent refnames
+
+                if(repeat_ref_fname.length() > 0) {
+                    string repeat_ref_fname_2N;
+                    string repeat_info_fname_2N;
+                    if (twoN) {
+                        repeat_ref_fname_2N = repeat_ref_fname + tag + ".rep.fa";
+                        repeat_info_fname_2N = repeat_info_fname + tag + ".rep.info";
+                    }
+                    EList<string> repeat_infiles(MISC_CAT);
+                    tokenize(repeat_ref_fname_2N, ",", repeat_infiles);
+                    driver<SString<char> >(repeat_ref_fname_2N,
+                                           repeat_infiles,
+                                           repeat_snp_fname,
+                                           repeat_haplotype_fname,
                                            dummy_fname,
-                                           outfile + tag,
+                                           dummy_fname,
+                                           dummy_fname,
+                                           repeat_info_fname_2N,
+                                           outfile + tag + ".rep",
                                            false,
                                            REF_READ_FORWARD,
-                                           true, // create local indexes
-                                           NULL, // no parent szs
-                                           NULL, // no parent refnames
-                                           &parent_szs, // get parent szs
-                                           &parent_refnames); // get parent refnames
-
-                    if(repeat_ref_fname.length() > 0) {
-                        string repeat_ref_fname_3N;
-                        string repeat_info_fname_3N;
-                        if (threeN) {
-                            repeat_ref_fname_3N = repeat_ref_fname + tag + ".rep.fa";
-                            repeat_info_fname_3N = repeat_info_fname + tag + ".rep.info";
-                        }
-                        EList<string> repeat_infiles(MISC_CAT);
-                        tokenize(repeat_ref_fname_3N, ",", repeat_infiles);
-                        driver<SString<char> >(repeat_ref_fname_3N,
-                                               repeat_infiles,
-                                               repeat_snp_fname,
-                                               repeat_haplotype_fname,
-                                               dummy_fname,
-                                               dummy_fname,
-                                               dummy_fname,
-                                               repeat_info_fname_3N,
-                                               outfile + tag + ".rep",
-                                               false,
-                                               REF_READ_FORWARD,
-                                               true, // create local index?
-                                               &parent_szs,
-                                               &parent_refnames);
-                    } else if (repeatIndex) {
-                        string repeat_ref_fname_3N = outfile + tag + ".rep.fa";
-                        string repeat_info_fname_3N = outfile + tag + ".rep.info";
-                        EList<string> repeat_infiles(MISC_CAT);
-                        tokenize(repeat_ref_fname_3N, ",", repeat_infiles);
-                        driver<SString<char> >(repeat_ref_fname_3N,
-                                               repeat_infiles,
-                                               repeat_snp_fname,
-                                               repeat_haplotype_fname,
-                                               dummy_fname,
-                                               dummy_fname,
-                                               dummy_fname,
-                                               repeat_info_fname_3N,
-                                               outfile + tag + ".rep",
-                                               false,
-                                               REF_READ_FORWARD,
-                                               true, // create local index?
-                                               &parent_szs,
-                                               &parent_refnames);
-                    }
+                                           true, // create local index?
+                                           &parent_szs,
+                                           &parent_refnames);
+                } else if (repeatIndex) {
+                    string repeat_ref_fname_2N = outfile + tag + ".rep.fa";
+                    string repeat_info_fname_2N = outfile + tag + ".rep.info";
+                    EList<string> repeat_infiles(MISC_CAT);
+                    tokenize(repeat_ref_fname_2N, ",", repeat_infiles);
+                    driver<SString<char> >(repeat_ref_fname_2N,
+                                           repeat_infiles,
+                                           repeat_snp_fname,
+                                           repeat_haplotype_fname,
+                                           dummy_fname,
+                                           dummy_fname,
+                                           dummy_fname,
+                                           repeat_info_fname_2N,
+                                           outfile + tag + ".rep",
+                                           false,
+                                           REF_READ_FORWARD,
+                                           true, // create local index?
+                                           &parent_szs,
+                                           &parent_refnames);
                 }
+
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

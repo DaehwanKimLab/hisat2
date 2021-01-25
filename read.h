@@ -2,7 +2,7 @@
  * Copyright 2011, Ben Langmead <langmea@cs.jhu.edu>
  *
  * This file is part of Bowtie 2.
- * This file is edited by Yun (Leo) Zhang for HISAT-3N.
+ * This file is edited by Yun (Leo) Zhang for HISAT-2N.
  *
  * Bowtie 2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,10 +33,10 @@
  * the threeN_cycle
  */
 enum {
-    threeN_CT_FW = 0,
-    threeN_CT_RC,
-    threeN_GA_FW,
-    threeN_GA_RC
+    twoN_FW = 0,
+    twoN_RC,
+    //threeN_GA_FW,
+    //threeN_GA_RC
 };
 
 enum rna_strandness_format {
@@ -51,7 +51,7 @@ typedef uint64_t TReadId;
 typedef size_t TReadOff;
 typedef int64_t TAlScore;
 
-extern bool threeN;
+extern bool twoN;
 
 class HitSet;
 
@@ -94,8 +94,8 @@ struct Read {
 		filter = '?';
 		seed = 0;
 		ns_ = 0;
-		threeN_cycle = threeN_CT_FW;
-        oppositeConversion_3N = false;
+ 		twoN_cycle = twoN_FW;
+        oppositeConversion_2N = false;
 	}
 
 	/**
@@ -124,17 +124,17 @@ struct Read {
      * 3rd cycle:  threeN_GA_FW(2),    threeN_CT_RC(1 = 3-2),
      * 4rd cycle:  threeN_GA_RC(3),    threeN_CT_FW(0 = 3-3),
      */
-    void changePlan3N(int newMappingCycle) {
-	    if (name.length() == 0) return;
+    void changePlan2N(int newMappingCycle) {
+	    /*if (name.length() == 0) return;
 	    if ((threeN_cycle == threeN_CT_FW && newMappingCycle == threeN_GA_RC) ||
 	        (threeN_cycle == threeN_CT_RC && newMappingCycle == threeN_GA_FW) ||
 	        (threeN_cycle == threeN_GA_FW && newMappingCycle == threeN_CT_RC)) {
             ns_ = 0;
             swap(patFw, patFw_3N);
             finalize();
-	    }
-        threeN_cycle = newMappingCycle;
-        oppositeConversion_3N = false;
+	    }*/
+        twoN_cycle = newMappingCycle;
+        //oppositeConversion_3N = false;
 	}
 
 	/**
@@ -186,13 +186,13 @@ struct Read {
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverse(altPatFw[j]);
 			}
-            if (threeN) originalRc.installReverse(originalFw);
+            if (twoN) originalRc.installReverse(originalFw);
 		} else {
 			patRc.installReverseComp(patFw);
 			for(int j = 0; j < alts; j++) {
 				altPatRc[j].installReverseComp(altPatFw[j]);
 			}
-            if (threeN) originalRc.installReverseComp(originalFw);
+            if (twoN) originalRc.installReverseComp(originalFw);
 		}
 	}
 
@@ -408,9 +408,9 @@ struct Read {
 	int      trimmed5;  // amount actually trimmed off 5' end
 	int      trimmed3;  // amount actually trimmed off 3' end
 	HitSet  *hitset;    // holds previously-found hits; for chaining
-	// for HISAT-3N
-	int threeN_cycle;
-	bool oppositeConversion_3N;
+	// for HISAT-2N
+	int twoN_cycle;
+	bool oppositeConversion_2N;
 };
 
 /**

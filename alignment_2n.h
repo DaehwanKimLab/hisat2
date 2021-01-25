@@ -1,24 +1,24 @@
 /*
  * Copyright 2020, Yun (Leo) Zhang <imzhangyun@gmail.com>
  *
- * This file is part of HISAT-3N.
+ * This file is part of HISAT-2N.
  *
- * HISAT-3N is free software: you can redistribute it and/or modify
+ * HISAT-2N is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * HISAT-3N is distributed in the hope that it will be useful,
+ * HISAT-2N is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HISAT-3N.  If not, see <http://www.gnu.org/licenses/>.
+ * along with HISAT-2N.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HISAT2_ALIGNMENT_3N_H
-#define HISAT2_ALIGNMENT_3N_H
+#ifndef HISAT2_ALIGNMENT_2N_H
+#define HISAT2_ALIGNMENT_2N_H
 
 #include <string>
 #include <vector>
@@ -33,15 +33,15 @@
 #include "reference.h"
 #include <unistd.h>
 #include <queue>
-#include "position_3n.h"
-#include "utility_3n.h"
+#include "position_2n.h"
+#include "utility_2n.h"
 
 
 extern char convertedFrom;
 extern char convertedTo;
 extern char convertedFromComplement;
 extern char convertedToComplement;
-extern vector<ht2_handle_t> repeatHandles;
+extern ht2_handle_t repeatHandle;
 extern struct ht2_index_getrefnames_result *refNameMap;
 extern int repeatLimit;
 extern bool uniqueOutputOnly;
@@ -78,7 +78,7 @@ public:
     int YS; // mate's AS
     BTString MD;
     BTString YT; //"UU" for single-end. "CP" for concordant alignment, "DP" for disconcordant alignment, "UP" for else.
-    // special tags in HISAT-3N
+    // special tags in HISAT-2N
     int Yf; // number of conversion.
     char YZ;  // this tag shows alignment strand:
               // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
@@ -98,7 +98,7 @@ public:
     // intermediate variable
     bool outputted = false; // whether the alignment is outputted.
     bool DNA = false;
-    int cycle_3N; // indicate which cycle_3N make this alignment result. 0 or 3 for repeatHandles[0], else repeatHandles[1]
+    int cycle_2N; // indicate which cycle_3N make this alignment result. 0 or 3 for repeatHandles[0], else repeatHandles[1]
     bool paired;
     bool forward;
     bool mapped;
@@ -141,7 +141,7 @@ public:
 
         outputted = false;
         DNA = false;
-        cycle_3N = -1;
+        cycle_2N = -1;
         paired = false;
         forward = false;
         mapped = false;
@@ -280,7 +280,7 @@ public:
         }
 
         // expand the repeat locations
-        ht2_error_t err = ht2_repeat_expand((cycle_3N == 0 || cycle_3N == 3) ? repeatHandles[0] : repeatHandles[1],
+        ht2_error_t err = ht2_repeat_expand(repeatHandle,
                                             chromosomeName.toZBuf(),
                                             location - 1,
                                             readSequence.length(),
@@ -511,7 +511,7 @@ public:
                         }
                         MD.append(refChar);
                     }
-                    if (newXM + (conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
+                    if (newXM + (conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/5) {
                         return false;
                     }
                     readPos++;
@@ -1042,4 +1042,4 @@ public:
     }
 };
 
-#endif //HISAT2_ALIGNMENT_3N_H
+#endif //HISAT2_ALIGNMENT_2N_H

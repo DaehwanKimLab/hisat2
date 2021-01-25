@@ -41,7 +41,7 @@
 #include "read.h"
 #include "util.h"
 
-extern bool threeN;
+extern bool twoN;
 /**
  * Classes and routines for reading reads from various input sources.
  */
@@ -522,11 +522,11 @@ public:
 	virtual ~PatternSourcePerThread() { }
 
 	/**
-	 * change 3N plan for both mate1 and mate2
+	 * change 2N plan for both mate1 and mate2
 	 */
-	void changePlan3N(int mappingCycle) {
-        buf1_.changePlan3N(mappingCycle);
-        buf2_.changePlan3N(3-mappingCycle);
+	void changePlan2N(int mappingCycle) {
+        buf1_.changePlan2N(mappingCycle);
+        buf2_.changePlan2N(mappingCycle);
 	}
 
 	/**

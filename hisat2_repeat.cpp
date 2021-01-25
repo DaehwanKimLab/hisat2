@@ -40,7 +40,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "repeat_builder.h"
-#include "alignment_3n.h"
+#include "alignment_2n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -97,7 +97,7 @@ TIndexOffU max_seed_extlen;
 static bool save_sa;
 static bool load_sa;
 
-bool threeN = false;
+bool twoN = false;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -140,7 +140,7 @@ static void resetOptions() {
     save_sa = false;
     load_sa = false;
     wrapper.clear();
-    threeN = false;
+    twoN = false;
 }
 
 // Argument constants for getopts
@@ -176,7 +176,7 @@ enum {
     ARG_MAX_SEED_EXTLEN,
     ARG_SAVE_SA,
     ARG_LOAD_SA,
-    ARG_3N
+    ARG_2N
 };
 
 /**
@@ -220,7 +220,7 @@ static void printUsage(ostream& out) {
         << "    --max-seed-extlen <int>" << endl
         << "    --save-sa" << endl
         << "    --load-sa" << endl
-        << "    --3N                    make 3N repeat database" << endl
+        << "    --2N                    make 2N repeat database" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -269,7 +269,7 @@ static struct option long_options[] = {
 	{(char*)"max-seed-extlen",required_argument, 0,            ARG_MAX_SEED_EXTLEN},
 	{(char*)"save-sa",        no_argument,       0,            ARG_SAVE_SA},
     {(char*)"load-sa",        no_argument,       0,            ARG_LOAD_SA},
-    {(char*)"3N",             no_argument,       0,            ARG_3N},
+    {(char*)"2N",             no_argument,       0,            ARG_2N},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -466,8 +466,8 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_LOAD_SA:
                 load_sa = true;
                 break;
-            case ARG_3N: {
-                threeN = true;
+            case ARG_2N: {
+                twoN = true;
                 break;
             }
 			case 'a': autoMem = false; break;
@@ -503,7 +503,7 @@ extern void initializeCntLut();
 extern void initializeCntBit();
 
 
-ConvertMatrix3N baseChange;
+ConvertMatrix2N baseChange;
 /**
  * Drive the index construction process and optionally sanity-check the
  * result.
@@ -606,7 +606,7 @@ static void driver(
     }
 
     TStr sOriginal;
-    if (threeN) {
+    if (twoN) {
         baseChange.restoreNormal();
         bool both_strand = forward_only ? false : true;
         for (int i = 0; i < is.size(); i++) {
@@ -898,21 +898,13 @@ int hisat2_repeat(int argc, const char **argv) {
         {
             Timer timer(cerr, "Total time for call to driver() for forward index: ", verbose);
             try {
-                int nloop = threeN ? 2 : 1; // if threeN == true, nloop = 2. else one loop
-                for (int i = 0; i < nloop; i++) {
-                    string tag = "";
-                    if (threeN) {
-                        if (i == 0) {
-                            tag = ".3n.1";
-                            baseChange.convert('C', 'T');
-                        } else {
-                            tag = ".3n.2";
-                            baseChange.convert('G', 'A');
-                        }
-                    }
-                    driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);
+                //int nloop = twoN ? 2 : 1; // if twoN == true, nloop = 2. else one loop
+                string tag = "";
+                if (twoN) {
+                    tag = ".2n";
+                    baseChange.convert('C', 'T');
                 }
-
+                driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);
             } catch(bad_alloc& e) {
                 if(autoMem) {
                     cerr << "Switching to a packed string representation." << endl;

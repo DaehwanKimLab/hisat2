@@ -4443,7 +4443,7 @@ void RB_SubSA::buildRepeatBase(const TStr& s,
         EList<TIndexOffU> positions; positions.reserveExact(end - begin);
         for(size_t j = begin; j < end; j++) positions.push_back(repeat_list_[j]);
         
-        if(!isSenseDominant(coordHelper, positions, seed_len_) && !threeN)
+        if(!isSenseDominant(coordHelper, positions, seed_len_) && !twoN)
             continue;
         
         senseDominant[i] = 1;
