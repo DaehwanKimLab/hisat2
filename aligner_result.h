@@ -344,6 +344,8 @@ public:
         if (!bTranscriptome) {
             if(splicescore > MAX_U8) splicescore = 0;
             else                     splicescore = MAX_U8 - splicescore;
+        } else {
+			splicescore = 0;
         }
 
         // Remaining 16 bits (rightmost 16 bits) for sum of left and right trim lengths

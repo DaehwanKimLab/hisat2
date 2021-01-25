@@ -117,7 +117,7 @@ def load_transcript(genome_seq, gtf_file):
 
             gene_biotype = values_dict['gene_biotype']
             gene_name = values_dict['gene_name']
-            genes[gene_id] = [list(), gene_biotype, gene_name, chrom]
+            genes[gene_id] = [list(), gene_biotype, gene_name, chrom, list()]
 
         elif feature == 'exon':
             transcript_id = values_dict['transcript_id']
@@ -157,7 +157,7 @@ def read_transcript(genome_seq, gtf_file, min_transcript_len=0):
         exon_lens = [e[1] - e[0] + 1 for e in exons]
         transcript_len = sum(exon_lens)
         if transcript_len >= min_transcript_len:
-            tmp_transcripts[tran] = [chrom, strand, transcript_len, exons, gene_id]
+            tmp_transcripts[tran] = [chrom, strand, transcript_len, exons, gene_id, list()]
         else:
             min_transcript_len_filtered += 1
 
@@ -272,22 +272,22 @@ def find_snp_gene(chr_snp_list, chr_exon_list, snps_list):
     return
 
 
-def make_gene_snps(snps, genes, exons_list):
+def make_gene_snps(snps, genes, exons_list=None):
     # snps_list[gene] = [list of snps within the gene]
     snps_list = defaultdict(list)
 
     # sort snps by position
     for chrname in snps:
         snps[chrname].sort(key=lambda x: x[2])
-
-        print(chrname, len(snps[chrname]))
+        if bVerbose:
+            print(chrname, len(snps[chrname]))
 
     # create temporary list of exons per each chromosome
     chr_exons_list = defaultdict(list)
     chr_gene_list = groupby_gene(genes)
     for chrname, gene_list in chr_gene_list.items():
         for gene_id in gene_list:
-            ex = exons_list[gene_id]
+            ex = genes[gene_id][4]
             chr_exons_list[chrname] += [[e[0], e[1], gene_id] for e in ex]
 
     for chrname in chr_exons_list:
@@ -414,7 +414,7 @@ def write_transcripts_snp(fp, gene_id, trans_ids, transcripts, exon_list, real_g
     return
 
 
-def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset=0):
+def write_transcripts_ss(fp, gene_id, gene, trans_ids, transcripts, exon_list, offset=0):
     ss = set()
 
     for trans_id in trans_ids:
@@ -428,16 +428,11 @@ def write_transcripts_ss(fp, gene_id, trans_ids, transcripts, exon_list, offset=
         assert len(old_exons) >= 1
 
         new_exons = list()
-        for old_exon in old_exons:
-            ne, idx = map_to_exons(old_exon, exon_list)
+        for idx in trans[5]:
+            new_start = exon_list[idx][2]
+            new_len = exon_list[idx][1] - exon_list[idx][0] + 1
 
-            if bDebug:
-                print(ne, idx)
-
-            if idx == -1:
-                continue
-
-            new_exons.append(ne)
+            new_exons.append([new_start, new_start + new_len - 1])
 
         for i in range(1, len(new_exons)):
             gap = new_exons[i][0] - new_exons[i - 1][1] - 1
@@ -476,7 +471,7 @@ def write_transcripts_gene_snp(fp, new_chrname, trans_ids, transcripts, snp_list
 
 
 def write_transcripts_map(fp, gene_id, chr_name, exon_list, real_gene_id='', offset=0, tome_len=0):
-    header='>{}\t{}'.format(gene_id, chr_name)
+    header = '>{}\t{}'.format(gene_id, chr_name)
 
     if real_gene_id:
         header += '\t{}\t{}\t{}'.format(real_gene_id, offset, tome_len)
@@ -492,6 +487,19 @@ def write_transcripts_map(fp, gene_id, chr_name, exon_list, real_gene_id='', off
 
     if len(exon_list) % 4 != 0:
         fp.write('\n')
+
+    return
+
+
+def write_transcripts_tidmap(fp, chrtome_name, chr_name, gene_id, tid_map):
+    num_bit_len = tid_map[0]
+    num_trans = len(tid_map[1])
+    header = '>{}\t{}\t{}\t{}\t{}'.format(chrtome_name, chr_name, gene_id, num_bit_len, num_trans)
+
+    print(header, file=fp)
+
+    for t in tid_map[1]:
+        fp.write('{:X}\t{}\n'.format(t[0], t[1]))
 
     return
 
@@ -555,7 +563,8 @@ def make_chrtome_seq(exon_list, out_seq, ref_seq):
     return
 
 
-def generate_chr_tome(genes, transcripts, gene_ids, exons_list, snps_list, haplotypes, genome_seq, trseq_file, trsnp_file, trmap_file, trss_file, trhap_file):
+def generate_chr_tome(genes, transcripts, gene_ids, snps_list, haplotypes, genome_seq, tid_map,
+                      trseq_file, trsnp_file, trmap_file, trss_file, trhap_file, trtid_file):
 
     chr_gene_list = groupby_gene(genes)
 
@@ -566,19 +575,22 @@ def generate_chr_tome(genes, transcripts, gene_ids, exons_list, snps_list, haplo
 
         chrtome_name = '{}_tome'.format(chrname)
 
-
         tmp_snp_list = list()
 
         for g in chrgene:
-            tmp_seq = get_seq(genome_seq[chrname], exons_list[g])
+            gene = genes[g]
+            exons = gene[4]
+            tmp_seq = get_seq(genome_seq[chrname], exons)
             seq += tmp_seq + 'N'
 
-            tran_ids = genes[g][0]
+            tran_ids = gene[0]
 
             # write ss, snp, map
-            write_transcripts_ss(trss_file, chrtome_name, tran_ids, transcripts, exons_list[g], offset)
-            write_transcripts_gene_snp(trsnp_file, chrtome_name, tran_ids, transcripts, snps_list[g], exons_list[g], g, offset)
-            write_transcripts_map(trmap_file, chrtome_name, chrname, exons_list[g], g, offset, len(tmp_seq))
+            write_transcripts_ss(trss_file, chrtome_name, gene, tran_ids, transcripts, exons, offset)
+            write_transcripts_gene_snp(trsnp_file, chrtome_name, tran_ids, transcripts, snps_list[g], exons, g, offset)
+            write_transcripts_map(trmap_file, chrtome_name, chrname, exons, g, offset, len(tmp_seq))
+
+            write_transcripts_tidmap(trtid_file, chrtome_name, chrname, g, tid_map[g])
 
             offset += len(tmp_seq) + 1
 
@@ -590,6 +602,167 @@ def generate_chr_tome(genes, transcripts, gene_ids, exons_list, snps_list, haplo
         write_fasta(trseq_file, chrtome_name, seq)
 
     return
+
+
+def make_unique_range(ranges):
+
+    tmp_range = list()
+    for r in ranges:
+        tmp_range.append([r[0], -1])
+        tmp_range.append([r[1], 1])
+
+    tmp_range.sort()
+
+    range_list = list()
+    opened = 0
+    last_pos = -1
+
+    for r in tmp_range:
+
+        if opened == 0:
+            assert r[1] < 0
+
+            last_pos = r[0]
+            opened += 1
+            continue
+
+        if r[1] < 0:
+            opened += 1
+            if last_pos == r[0]:
+                continue
+
+            assert last_pos <= r[0] - 1
+            range_list.append([last_pos, r[0] - 1])
+            last_pos = r[0]
+        else:
+            opened -= 1
+            if last_pos == r[0] + 1:
+                continue
+
+            assert last_pos <= r[0]
+            range_list.append([last_pos, r[0]])
+            last_pos = r[0] + 1
+
+    assert opened == 0
+
+    if len(range_list) > 0:
+        last_pos = range_list[0][1]
+        for r in range_list[1:]:
+            assert last_pos < r[0]
+            last_pos = r[1]
+
+    return range_list
+
+
+def generate_common_exons(genes, transcripts):
+    if bVerbose:
+        print('Genes:', len(genes))
+        print('Transcripts:', len(transcripts))
+
+    for gene_id, gene_value in genes.items():
+        if bDebug:
+            print(gene_id)
+
+        all_exons = []
+
+        for tid in gene_value[0]:
+            trans = transcripts[tid]
+            assert gene_id == trans[4]
+            all_exons += trans[3]
+
+        unit_exons = make_unique_range(all_exons)
+
+        tmp_common_exons = list()
+        offset = 0
+        for r in unit_exons:
+            tmp_common_exons.append([r[0], r[1], offset])
+            offset += (r[1] - r[0] + 1)
+
+        if bDebug:
+            print(len(tmp_common_exons), tmp_common_exons)
+
+
+        gene_value[4] = tmp_common_exons
+
+    return
+
+
+def map_new_exons(new_exons, old_exons):
+    id_list = list()
+
+    new_i = 0
+    new_j = 0
+
+    for old_e in old_exons:
+
+        while new_i < len(new_exons):
+            if new_exons[new_i][0] == old_e[0]:
+                break
+            new_i += 1
+
+        assert new_i < len(new_exons)
+
+        new_j = new_i
+
+        while new_j < len(new_exons):
+            if new_exons[new_j][1] == old_e[1]:
+                break
+            new_j += 1
+
+        assert new_j < len(new_exons)
+        assert new_i <= new_j
+
+        tmp_len = 0
+        for i in range(new_i, new_j + 1):
+            id_list.append(i)
+            tmp_len += (new_exons[i][1] - new_exons[i][0] + 1)
+
+        assert tmp_len == (old_e[1] - old_e[0] + 1)
+
+        new_i = new_j
+
+    return id_list
+
+
+def translate_to_common_exons(genes, transcripts):
+    # print(transcripts)
+
+    for tran_id, tran_item in transcripts.items():
+        old_exons = tran_item[3]
+        gene_id = tran_item[4]
+        new_exons = genes[gene_id][4]
+
+        id_list = map_new_exons(new_exons, old_exons)
+        # print(tran_item)
+        tran_item[5] = id_list
+        # print(gene_id, old_exons, new_exons, id_list)
+
+    return
+
+
+def generate_exon_tid_map(genes, transcripts):
+    # for each gene, make a list of (exon bit map, tid)
+
+    tid_map = dict()
+
+    # gene [list(), gene_biotype, gene_name, chrom, list()]
+    for gene_id, gene in genes.items():
+
+        tid_map[gene_id] = [len(gene[4]), list()]
+
+        for tid in gene[0]:
+            tran = transcripts[tid]
+
+            # tran[5] is a list of exon index
+            bitmap = 0
+            for i in tran[5]:
+                bitmap += 2 ** i
+
+            # print(len(tran[5]), max(tran[5]), len(gene[4]), bitmap, gene_id, tid)
+
+            tid_map[gene_id][1].append([bitmap, tid])
+
+    return tid_map
 
 
 def extract_transcript_graph(genome_file, gtf_file, snp_file, hap_file, base_fname):
@@ -608,66 +781,26 @@ def extract_transcript_graph(genome_file, gtf_file, snp_file, hap_file, base_fna
 
     # get sorted id
     gene_ids = sorted(list(genes.keys()))
-    exons_list = {}
+    # exons_list = {}
 
-    # for each gene, build a consensus exons
-    #   exon in consensus exons is not overlapped to other exon
-    for gene_id in gene_ids:
-        if bDebug:
-            if gene_id != "ENSG00000244625":
-                continue
+    generate_common_exons(genes, transcripts)
 
-        trans_ids = genes[gene_id][0]
-        chrom = transcripts[trans_ids[0]][0]
-        tmp_exons_list = list()
-        # collect all exons of the gene
-        for tid in trans_ids:
-            tmp_exons_list += transcripts[tid][3]
+    translate_to_common_exons(genes, transcripts)
 
-        exon_list = make_consensus_exons(tmp_exons_list)
-
-        exons_list[gene_id] = exon_list
+    tid_map = generate_exon_tid_map(genes, transcripts)
 
     # get snps only in the genes
-    snps_list = make_gene_snps(snps, genes, exons_list)
+    snps_list = make_gene_snps(snps, genes)
 
     with open(base_fname + ".gt.fa", "w") as trseq_file, \
             open(base_fname + ".gt.snp", "w") as trsnp_file, \
             open(base_fname + ".gt.map", "w") as trmap_file, \
             open(base_fname + ".gt.ss", "w") as trss_file, \
-            open(base_fname + ".gt.haplotype", "w") as trhap_file:
+            open(base_fname + ".gt.haplotype", "w") as trhap_file, \
+            open(base_fname + ".gt.tmap", "w") as trtid_file:
 
-        if bChrTome:
-            generate_chr_tome(genes, transcripts, gene_ids, exons_list, snps_list, haplotypes, genome_seq, trseq_file, trsnp_file,
-                              trmap_file, trss_file, trhap_file)
-        else:
-            if bDebug:
-                pprint.pprint(sorted(tmp_exons_list))
-                pprint.pprint(exon_list)
-
-            for gene_id in gene_ids:
-                trans_ids = genes[gene_id][0]
-                chrom = transcripts[trans_ids[0]][0]
-                exon_list = exons_list[gene_id]
-
-                # print sequeunce
-                write_transcripts_seq(trseq_file, gene_id, chrom, genome_seq, exon_list)
-
-                # print snps
-                write_transcripts_snp(trsnp_file, gene_id, trans_ids, transcripts, exon_list)
-
-                # print splice-sites
-                write_transcripts_ss(trss_file, gene_id, trans_ids, transcripts, exon_list)
-
-                # print exon_map
-                write_transcripts_map(trmap_file, gene_id, chrom, exon_list)
-
-                """
-        exon_count = 0
-        for t_id in genes[gene_id]:
-            exon_count += len(transcripts[t_id][3])
-        print(gene_id, len(genes[gene_id]), exon_count)
-        """
+        generate_chr_tome(genes, transcripts, gene_ids, snps_list, haplotypes, genome_seq, tid_map,
+                          trseq_file, trsnp_file, trmap_file, trss_file, trhap_file, trtid_file)
 
 
     return
@@ -766,7 +899,7 @@ if __name__ == '__main__':
                         help='Show more messages')
 
     args = parser.parse_args()
-    if not args.gtf_file or not args.genome_file or not args.out_fname or not args.hap_file:
+    if not args.gtf_file or not args.genome_file: # or not args.out_fname or not args.hap_file:
         parser.print_help()
         exit(1)
 

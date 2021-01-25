@@ -1679,13 +1679,17 @@ public:
                         ss_file >> left >> right >> strand;
                         // Convert exonic position to intronic position
                         left += 1; right -= 1;
-                        if(left >= right) continue;
+                        //if(left >= right) continue;
+                        if(left > right) continue;
                         index_t chr_idx = 0;
                         for(; chr_idx < _refnames_nospace.size(); chr_idx++) {
                             if(chr == _refnames_nospace[chr_idx])
                                 break;
                         }
-                        if(chr_idx >= _refnames_nospace.size()) continue;
+                        if(chr_idx >= _refnames_nospace.size()) {
+                            cerr << "Can't find chrname: " << chr << endl;
+                            continue;
+                        }
                         assert_eq(chr_szs.size(), _refnames_nospace.size());
                         assert_lt(chr_idx, chr_szs.size());
                         pair<index_t, index_t> tmp_pair = chr_szs[chr_idx];
@@ -1695,7 +1699,7 @@ public:
                         // check whether ambiguous base is in exon's last and first base
                         if(!checkPosToSzs(szs, szs_idx, left - 1)
                                 || !checkPosToSzs(szs, szs_idx, right + 1)) {
-                            //cerr << "Skip ss. " << chr << ", " << left - 1 << ", " << right + 1 << endl;
+                            cerr << "Skip ss. " << chr << ", " << left - 1 << ", " << right + 1 << endl;
                             continue;
                         }
 
@@ -1722,13 +1726,22 @@ public:
                                 }
                             }
                         }
-                        if(inside_Ns) continue;
+                        if(inside_Ns) {
+                            cerr << "Inside Ns" << endl;
+                            continue;
+                        }
                         left = sofar_len + add_pos + left;
                         right = sofar_len + add_pos + right;
                         if(chr_idx + 1 < chr_szs.size()) {
-                            if(right >= chr_szs[chr_idx + 1].first) continue;
+                            if(right >= chr_szs[chr_idx + 1].first) {
+                                cerr << "out of seq1" << endl;
+                                continue;
+                            }
                         } else {
-                            if(right >= jlen) continue;
+                            if(right >= jlen) {
+                                cerr << "out of seq2" << endl;
+                                continue;
+                            }
                         }
                         
                         // Avoid splice sites in repetitive sequences
@@ -1744,7 +1757,10 @@ public:
                             }
                             if(_alts.size() > 0) {
                                 if(_alts.back().left == left &&
-                                   _alts.back().right == right) continue;
+                                   _alts.back().right == right) {
+                                    cerr << "dup1" << endl;
+                                    continue;
+                                }
                             }
                             if(ss_seq.find(seq) == ss_seq.end()) ss_seq[seq] = 1;
                             else                                 ss_seq[seq]++;
@@ -1775,9 +1791,11 @@ public:
                                 seq = seq << 2 | s[si];
                             }
                             assert(ss_seq.find(seq) != ss_seq.end());
-                            alt.excluded = ss_seq[seq] > 1;
+//                            alt.excluded = ss_seq[seq] > 1;
+                            alt.excluded = false;
                         }
                     }
+
                 }
                 
                 if(exonfile != "") {
@@ -1908,7 +1926,13 @@ public:
                     }
 #endif
                 }
-                
+                for(size_t i = 0; i < _alts.size(); i++) {
+                    ALT<index_t>& alt = _alts[i];
+                    if(!alt.splicesite()) continue;
+                    if (alt.excluded) {
+                        cerr << "Excluded" << endl;
+                    }
+                }
                 writeIndex<index_t>(fout7, (index_t)_alts.size(), this->toBe());
                 writeIndex<index_t>(fout8, (index_t)_alts.size(), this->toBe());
                 for(index_t i = 0; i < _alts.size(); i++) {
