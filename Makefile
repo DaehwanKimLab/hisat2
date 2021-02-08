@@ -176,7 +176,7 @@ SSE_FLAG=-msse2
 
 DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG)
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""
-RELEASE_FLAGS  = -O3 $(BITS_FLAG) $(SSE_FLAG) -funroll-loops -g3
+RELEASE_FLAGS  = -O3 $(BITS_FLAG) $(SSE_FLAG) -funroll-loops -g3 $(CPPFLAGS)
 RELEASE_DEFS   = -DCOMPILER_OPTIONS="\"$(RELEASE_FLAGS) $(EXTRA_FLAGS)\""
 NOASSERT_FLAGS = -DNDEBUG
 FILE_FLAGS     = -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
@@ -306,7 +306,7 @@ hisat-bp-bin: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRA
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT_CPPS_MAIN) \
-	$(LIBS) $(SEARCH_LIBS)
+	$(LIBS) $(SEARCH_LIBS) $(LDFLAGS)
 
 hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
 	$(CXX) $(DEBUG_FLAGS) \
@@ -315,7 +315,7 @@ hisat-bp-bin-debug: hisat_bp.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT_CPPS_MAIN) \
-	$(LIBS) $(SEARCH_LIBS)
+	$(LIBS) $(SEARCH_LIBS) $(LDFLAGS)
 
 #
 # hisat2-repeat targets
@@ -327,7 +327,7 @@ hisat2-repeat: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 hisat2-repeat-debug: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
@@ -335,7 +335,7 @@ hisat2-repeat-debug: hisat2_repeat.cpp $(REPEAT_CPPS) $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_REPEAT_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 
 #
@@ -348,7 +348,7 @@ hisat2-build-s: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 hisat2-build-l: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
@@ -356,7 +356,7 @@ hisat2-build-l: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 hisat2-build-s-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
@@ -364,7 +364,7 @@ hisat2-build-s-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 hisat2-build-l-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(CXX) $(DEBUG_FLAGS) $(DEBUG_DEFS) $(EXTRA_FLAGS) \
@@ -372,7 +372,7 @@ hisat2-build-l-debug: hisat2_build.cpp $(SHARED_CPPS) $(HEADERS)
 	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_BUILD_CPPS_MAIN) \
-	$(LIBS) $(BUILD_LIBS)
+	$(LIBS) $(BUILD_LIBS) $(LDFLAGS)
 
 #
 # hisat2 targets
@@ -384,7 +384,7 @@ hisat2-align-s: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRA
 	$(INC) $(SEARCH_INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_CPPS_MAIN) \
-	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS) $(LDFLAGS)
 
 hisat2-align-l: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) \
@@ -392,7 +392,7 @@ hisat2-align-l: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRA
 	$(INC) $(SEARCH_INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_CPPS_MAIN) \
-	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS) $(LDFLAGS)
 
 hisat2-align-s-debug: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
 	$(CXX) $(DEBUG_FLAGS) \
@@ -401,7 +401,7 @@ hisat2-align-s-debug: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 	$(INC) $(SEARCH_INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_CPPS_MAIN) \
-	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS) $(LDFLAGS)
 
 hisat2-align-l-debug: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEARCH_FRAGMENTS)
 	$(CXX) $(DEBUG_FLAGS) \
@@ -410,7 +410,7 @@ hisat2-align-l-debug: hisat2.cpp $(SEARCH_CPPS) $(SHARED_CPPS) $(HEADERS) $(SEAR
 	$(INC) $(SEARCH_INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) $(HISAT2_CPPS_MAIN) \
-	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS)
+	$(LIBS) $(SRA_LIB) $(SEARCH_LIBS) $(LDFLAGS)
 
 #
 # hisat2-inspect targets
@@ -423,7 +423,7 @@ hisat2-inspect-s: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(INC) -I . \
 	-o $@ $< \
 	$(SHARED_CPPS) \
-	$(LIBS) $(INSPECT_LIBS)
+	$(LIBS) $(INSPECT_LIBS) $(LDFLAGS)
 
 hisat2-inspect-l: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(RELEASE_FLAGS) \
@@ -432,7 +432,7 @@ hisat2-inspect-l: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(INC) -I . \
 	-o $@ $< \
 	$(SHARED_CPPS) \
-	$(LIBS) $(INSPECT_LIBS)
+	$(LIBS) $(INSPECT_LIBS) $(LDFLAGS)
 
 hisat2-inspect-s-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS) 
 	$(CXX) $(DEBUG_FLAGS) \
@@ -441,7 +441,7 @@ hisat2-inspect-s-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(INC) -I . \
 	-o $@ $< \
 	$(SHARED_CPPS) \
-	$(LIBS) $(INSPECT_LIBS)
+	$(LIBS) $(INSPECT_LIBS) $(LDFLAGS)
 
 hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS) 
 	$(CXX) $(DEBUG_FLAGS) \
@@ -450,7 +450,7 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(INC) -I . \
 	-o $@ $< \
 	$(SHARED_CPPS) \
-	$(LIBS) $(INSPECT_LIBS)
+	$(LIBS) $(INSPECT_LIBS) $(LDFLAGS)
 
 #
 # HT2LIB targets
