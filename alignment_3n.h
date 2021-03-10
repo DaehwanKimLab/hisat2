@@ -527,7 +527,7 @@ public:
                 }
                 MD.append('^');
                 for (int j = 0; j < cigarLen; j++) {
-                    MD.append(*(refSeq + refPos));
+                    MD.append(intToBase[*(refSeq + refPos)]);
                     refPos++;
                 }
             }
