@@ -21,7 +21,6 @@
 #define ALIGNMENT_3N_TABLE_H
 
 #include <string>
-#include <regex>
 #include "utility_3n_table.h"
 
 extern bool uniqueOnly;
