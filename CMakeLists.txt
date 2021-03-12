@@ -32,7 +32,7 @@ if(MINGW OR CYGWIN)
 endif()
  
 if (USE_SRA AND APPLE)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.6")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.7 -stdlib=libc++")
 endif()
 
 set(HISAT2_BIN_LIST
@@ -212,7 +212,6 @@ if(USE_SRA)
 	if(NOT NCBI_NGS_DIR)
 		message(FATAL_ERROR "You should set NCBI_NGS_DIR path. cmake3 .... -DNCBI_NGS_DIR=/path/to/ngs")
 	endif()
-	#set(NCBI_NGS_DIR /home/parkch/.local/ngs)
 
 	target_compile_options(hisat2-align-s PUBLIC "-DUSE_SRA")
 	target_compile_options(hisat2-align-l PUBLIC "-DUSE_SRA")
@@ -222,9 +221,15 @@ if(USE_SRA)
 	set(NCBI_LIBS 
 		${NCBI_NGS_DIR}/lib64/libncbi-ngs-c++-static.a
 		${NCBI_NGS_DIR}/lib64/libngs-c++-static.a
-		${NCBI_NGS_DIR}/lib64/libncbi-vdb-static.a
-		${CMAKE_DL_LIBS}
 		)
+
+	if(EXISTS ${NCBI_NGS_DIR}/lib64/libncbi-ngs-static.a)
+		set(NCBI_LIBS ${NCBI_LIBS} ${NCBI_NGS_DIR}/lib64/libncbi-ngs-static.a)
+	endif()
+
+	set(NCBI_LIBS ${NCBI_LIBS} ${NCBI_NGS_DIR}/lib64/libncbi-vdb-static.a)
+
+	set(NCBI_LIBS ${NCBI_LIBS} ${CMAKE_DL_LIBS})
 
 	target_link_libraries(hisat2-align-s ${NCBI_LIBS})
 	target_link_libraries(hisat2-align-l ${NCBI_LIBS})

@@ -94,7 +94,11 @@ SRA_LIB =
 SERACH_INC = 
 ifeq (1,$(USE_SRA))
 	SRA_DEF = -DUSE_SRA
-	SRA_LIB = -lncbi-ngs-c++-static -lngs-c++-static -lncbi-vdb-static -ldl
+	SRA_LIB = -lncbi-ngs-c++-static -lngs-c++-static
+	ifneq (,$(wildcard $(NCBI_VDB_DIR)/lib64/libncbi-ngs-static.a))
+		SRA_LIB += -lncbi-ngs-static
+	endif
+	SRA_LIB += -lncbi-vdb-static -ldl
 	SEARCH_INC += -I$(NCBI_NGS_DIR)/include -I$(NCBI_VDB_DIR)/include
 	SEARCH_LIBS += -L$(NCBI_NGS_DIR)/lib64 -L$(NCBI_VDB_DIR)/lib64
 endif
