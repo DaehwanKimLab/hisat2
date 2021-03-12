@@ -67,9 +67,12 @@ public:
      * set the chromosome, location (position), and strand information.
      */
 
-    void set (string& inputChr, long long int inputLoc, int inputStrand) {
+    void set (string& inputChr, long long int inputLoc) {
         chromosome = inputChr;
         location = inputLoc + 1;
+    }
+
+    void set(char inputStrand) {
         strand = inputStrand;
     }
 
@@ -108,32 +111,6 @@ public:
     int nThreads = 1;
     ChromosomeFilePositions chromosomePos; // store the chromosome name and it's streamPos. To quickly find new chromosome in file.
 
-    /**
-     * given the target Position and search range, perform binary search to location the Position in Positions.
-     * if we cannot find the specific position, return the position closet (smaller) to target position.
-     */
-    int searchPosition(long long int &targetPos, int start, int end) {
-        // if the target position is smaller or equal than first refPosition, return 0.
-        // if the target position is larger or equal to the first refPosition, return the last index.
-        if (targetPos <= refPositions[0]->location) {
-            return 0;
-        } else if (targetPos >= refPositions.back()->location) {
-            return refPositions.size()-1;
-        }
-        if (start <= end) {
-            int middle = (start + end) / 2;
-
-            if (refPositions[middle]->location == targetPos) {
-                return middle;
-            }
-            if (refPositions[middle]->location > targetPos) {
-                return searchPosition(targetPos, start, middle-1);
-            }
-            return searchPosition(targetPos, middle+1, end);
-        }
-        return end;
-    }
-
     Positions(string inputRefFileName, int inputNThreads) {
         working = true;
         nThreads = inputNThreads;
@@ -154,6 +131,14 @@ public:
     }
 
     /**
+     * given the target Position output the corresponding position index in refPositions.
+     */
+    int getIndex(long long int &targetPos) {
+        int firstPos = refPositions[0]->location;
+        return targetPos - firstPos;
+    }
+
+    /**
      * given reference line (start with '>'), extract the chromosome information.
      * this is important when there is space in chromosome name. the SAM information only contain the first word.
      */
@@ -167,54 +152,28 @@ public:
      */
     void appendRefPosition(string& line) {
         Position* newPos;
-
-        // check if the first base is CG.
-        if (CG_only && lastBase == 'C' && line[0] == 'G') {
-            getFreePosition(newPos);
-            newPos->set(chromosome, location-1, '+');
-            refPositions.push_back(newPos);
-
-            getFreePosition(newPos);
-            newPos->set(chromosome, location, '-');
-            refPositions.push_back(newPos);
-        }
-
         // check the base one by one
-        for (int i = 0; i < line.size()-1; i++) {
+        char* b;
+        for (int i = 0; i < line.size(); i++) {
+            getFreePosition(newPos);
+            newPos->set(chromosome, location+i);
+            b = &line[i];
             if (CG_only) {
-                if (line[i] == 'C' && line[i+1] == 'G') {
-                    getFreePosition(newPos);
-                    newPos->set(chromosome, location+i, '+');
-                    refPositions.push_back(newPos);
-
-                    getFreePosition(newPos);
-                    newPos->set(chromosome, location+i+1, '-');
-                    refPositions.push_back(newPos);
+                if (i == 0 && lastBase == 'C' && *b == 'G') {
+                    refPositions.back()->set('+');
+                    newPos->set('-');
                 }
             } else {
-                if (line[i] == convertFrom) {
-                    getFreePosition(newPos);
-                    newPos->set(chromosome, location+i, '+');
-                    refPositions.push_back(newPos);
-                } else if (line[i] == convertFromComplement) {
-                    getFreePosition(newPos);
-                    newPos->set(chromosome, location+i, '-');
-                    refPositions.push_back(newPos);
+                if (*b == convertFrom) {
+                    newPos->set('+');
+                } else if (*b == convertFromComplement) {
+                    newPos->set('-');
                 }
             }
+            refPositions.push_back(newPos);
+            lastBase = *b;
         }
-        // check the last base
-        if (!CG_only) {
-            if (line.back() == convertFrom) {
-                getFreePosition(newPos);
-                newPos->set(chromosome, location+line.size()-1, '+');
-                refPositions.push_back(newPos);
-            } else if (line.back() == convertFromComplement) {
-                getFreePosition(newPos);
-                newPos->set(chromosome, location+line.size()-1, '-');
-                refPositions.push_back(newPos);
-            }
-        }
+        location += line.size();
     }
 
     /**
@@ -262,7 +221,7 @@ public:
         int index;
         for (index = 0; index < refPositions.size(); index++) {
             if (refPositions[index]->location < refCoveredPosition - loadingBlockSize) {
-                if (refPositions[index]->empty()) {
+                if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                     returnPosition(refPositions[index]);
                 } else {
                     outputPositionPool.push(refPositions[index]);
@@ -284,7 +243,7 @@ public:
             return;
         }
         for (int index = 0; index < refPositions.size(); index++) {
-            if (refPositions[index]->empty()) {
+            if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                 returnPosition(refPositions[index]);
             } else {
                 outputPositionPool.push(refPositions[index]);
@@ -329,8 +288,6 @@ public:
                     line[i] = toupper(line[i]);
                 }
                 appendRefPosition(line);
-                lastBase = line.back();
-                location += line.size();
                 if (location >= refCoveredPosition) {
                     return;
                 }
@@ -358,9 +315,6 @@ public:
                 }
 
                 appendRefPosition(line);
-                lastBase = line.back();
-                location += line.size();
-
                 if (location >= refCoveredPosition) {
                     return ;
                 }
@@ -376,25 +330,23 @@ public:
             return;
         }
         long long int startPos = newAlignment.location; // 1-based position
-        long long int refPos;
         // find the first reference position in pool.
-        int index = searchPosition(newAlignment.location, 0, refPositions.size()-1);
+        int index = getIndex(newAlignment.location);
 
-        for (int i = 0; i < newAlignment.bases.size(); i++) {
-            refPos = startPos + newAlignment.bases[i].refPos;
-
-            while(refPositions[index]->location <= refPos) {
-                // found the position in reference.
-                if (refPositions[index]->location == refPos) {
-                    refPositions[index]->appendBase(newAlignment.bases[i]);
-                    break;
-                }
-                // did not find the position in reference, check next.
-                index++;
-                if (index >= refPositions.size()) {
-                    return;
-                }
+        for (int i = 0; i < newAlignment.sequence.size(); i++) {
+            PosQuality* b = &newAlignment.bases[i];
+            if (b->remove) {
+                continue;
             }
+
+            Position* pos = refPositions[index+b->refPos];
+            assert (pos->location == startPos + b->refPos);
+
+            if (pos->strand == '?') {
+                // this is for CG-only mode. read has a 'C' or 'G' but not 'CG'.
+                continue;
+            }
+            pos->appendBase(newAlignment.bases[i]);
         }
     }
 

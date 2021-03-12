@@ -33,9 +33,6 @@ extern char convertToComplement;
 
 using namespace std;
 
-regex MDExp("[0-9]+|[A-Z]|\\^[A-Z]+");
-regex cigarExp("\\d+\\w");
-
 /**
  * the class to store information from one SAM line
  */
@@ -45,8 +42,6 @@ public:
     long long int location;
     int flag;
     bool mapped;
-    string MD;
-    string cigarString;
     char strand;
     string sequence;
     string quality;
@@ -54,14 +49,16 @@ public:
     string mapQ;
     int NH;
     vector<PosQuality> bases;
+    CIGAR cigarString;
+    MD_tag MD;
 
     void initialize() {
         chromosome.clear();
         location = -1;
         flag = -1;
         mapped = false;
-        MD.clear();
-        cigarString.clear();
+        MD.initialize();
+        cigarString.initialize();
         sequence.clear();
         quality.clear();
         unique = false;
@@ -106,14 +103,14 @@ public:
                     unique = true;
                 }
             } else if (count == 5) {
-                cigarString = line->substr(startPosition, endPosition - startPosition);
+                cigarString.loadString(line->substr(startPosition, endPosition - startPosition));
             } else if (count == 9) {
                 sequence = line->substr(startPosition, endPosition - startPosition);
             } else if (count == 10) {
                 quality = line->substr(startPosition, endPosition - startPosition);
             } else if (count > 10) {
                 if (startWith(line, startPosition, "MD")) {
-                    MD = line->substr(startPosition + 5, endPosition - startPosition - 5);
+                    MD.loadString(line->substr(startPosition + 5, endPosition - startPosition - 5));
                 } else if (startWith(line, startPosition, "NM")) {
                     NH = stoi(line->substr(startPosition + 5, endPosition - startPosition - 5));
                 } else if (startWith(line, startPosition, "YZ")) {
@@ -135,91 +132,103 @@ public:
             return;
         }
         appendBase();
-        adjustPos();
     }
 
     /**
-     * find all my target base, append to bases.
+     *  scan all base in read sequence label them if they are qualified.
      */
     void appendBase() {
-        smatch match;
-        auto searchStart(MD.cbegin());
-        int pos = 0;
-        bases.reserve(sequence.size()/4);
-        while (regex_search(searchStart, MD.cend(), match, MDExp)) {
-            string test = match.str();
-            if (isdigit(match.str().front())) { // the first char of match is digit this is match
-                int len = stoi(match.str());
+        if (!mapped) {
+            return;
+        }
+
+        bases.reserve(sequence.size());
+        for (int i = 0; i < sequence.size(); i++) {
+            bases.emplace_back(i);
+        }
+        int pos = adjustPos();
+
+        string match;
+        while (MD.getNextSegment(match)) {
+            if (isdigit(match.front())) { // the first char of match is digit this is match
+                int len = stoi(match);
                 for (int i = 0; i < len; i++) {
+                    while (bases[pos].remove) {
+                        pos++;
+                    }
                     if ((strand == '+' && sequence[pos] == convertFrom) ||
                         (strand == '-' && sequence[pos] == convertFromComplement)) {
-                        bases.emplace_back(pos, quality[pos], false);
+                        bases[pos].setQual(quality[pos], false);
+                    } else {
+                        bases[pos].remove = true;
                     }
                     pos ++;
                 }
-            } else if (isalpha(match.str().front())) { // this is mismatch or conversion
-                char refBase = match.str().front();
+            } else if (isalpha(match.front())) { // this is mismatch or conversion
+                char refBase = match.front();
                 // for + strand, it should have C->T change
                 // for - strand, it should have G->A change
+                while (bases[pos].remove) {
+                    pos++;
+                }
+
                 if ((strand == '+' && refBase == convertFrom && sequence[pos] == convertTo) ||
                     (strand == '-' && refBase == convertFromComplement && sequence[pos] == convertToComplement)){
-                    bases.emplace_back(pos, quality[pos], true);
+                    bases[pos].setQual(quality[pos], true);
+                } else {
+                    bases[pos].remove = true;
                 }
                 pos ++;
-            } else { // deletion
-                pos += match.str().size()-1;
+            } else { // deletion. do nothing.
+
             }
-            searchStart = match.suffix().first;
         }
     }
 
     /**
-     * adjust the read position in methylatedBases and unmethylatedBases to reference position
+     * adjust the reference position in bases
      */
-    void adjustPos() {
-        smatch match;
-        auto searchStart(cigarString.cbegin());
+    int  adjustPos() {
+
         int readPos = 0;
+        int returnPos = 0;
+        int seqLength = sequence.size();
 
-        while (regex_search(searchStart, cigarString.cend(), match, cigarExp)) {
-            string cigar = match.str();
-            char cigarSymbol = cigar.back();
-            int cigarLen = stoi(cigar.substr(0, cigar.size()-1));
+        char cigarSymbol;
+        int cigarLen;
 
+        while (cigarString.getNextSegment(cigarLen, cigarSymbol)) {
             if (cigarSymbol == 'S') {
                 if (readPos == 0) { // soft clip is at the begin of the read
-                    for (int i = 0; i < bases.size(); i++) {
-                        if (bases[i].readPos <= cigarLen) {
-                            bases.erase(bases.begin()+i);
-                        }
+                    returnPos = cigarLen;
+                    for (int i = cigarLen; i < seqLength; i++) {
+                        bases[i].refPos -= cigarLen;
                     }
                 } else { // soft clip is at the end of the read
-                    for (int i = 0; i < bases.size(); i++) {
-                        if (bases[i].readPos >= sequence.size()-cigarLen) {
-                            bases.erase(bases.begin()+i);
-                        }
-                    }
+                    // do nothing
                 }
                 readPos += cigarLen;
             } else if (cigarSymbol == 'N') {
-                for (int i = 0; i < bases.size(); i++) {
-                    if (bases[i].readPos >= readPos) {
-                        bases[i].readPos += cigarLen;
-                    }
+                for (int i = readPos; i < seqLength; i++) {
+                    bases[i].refPos += cigarLen;
                 }
             } else if (cigarSymbol == 'M') {
+                for (int i = readPos; i < readPos+cigarLen; i++) {
+                    bases[i].remove = false;
+                }
                 readPos += cigarLen;
             } else if (cigarSymbol == 'I') {
+                for (int i = readPos + cigarLen; i < seqLength; i++) {
+                    bases[i].refPos -= cigarLen;
+                }
                 readPos += cigarLen;
             } else if (cigarSymbol == 'D') {
-                for (int i = 0; i < bases.size(); i++) {
-                    if (bases[i].readPos >= readPos) {
-                        bases[i].readPos += cigarLen;
-                    }
+                for (int i = readPos; i < seqLength; i++) {
+                    bases[i].refPos += cigarLen;
                 }
             }
-            searchStart = match.suffix().first;
         }
+        return returnPos;
     }
 
 };

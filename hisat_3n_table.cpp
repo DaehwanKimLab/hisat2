@@ -31,7 +31,7 @@ bool uniqueOnly = false;
 bool multipleOnly = false;
 bool CG_only = false;
 int nThreads = 1;
-long long int loadingBlockSize = 1000000;
+long long int loadingBlockSize = 3000000;
 char convertFrom = '0';
 char convertTo = '0';
 char convertFromComplement;
