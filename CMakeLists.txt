@@ -32,7 +32,7 @@ if(MINGW OR CYGWIN)
 endif()
  
 if (USE_SRA AND APPLE)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.6")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=10.7 -stdlib=libc++")
 endif()
 
 set(HISAT2_BIN_LIST
