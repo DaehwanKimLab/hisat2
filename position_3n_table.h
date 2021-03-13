@@ -25,6 +25,7 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <cassert>
 #include "alignment_3n_table.h"
 
 using namespace std;
