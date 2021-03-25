@@ -70,7 +70,7 @@
 #include <iostream>
 #include <limits>
 #include "threading.h"
-#include <emmintrin.h>
+#include "sse_wrap.h"
 #include "aligner_sw_common.h"
 #include "aligner_sw_nuc.h"
 #include "ds.h"

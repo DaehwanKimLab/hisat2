@@ -26,9 +26,11 @@ GCC_SUFFIX =
 CC = $(GCC_PREFIX)/gcc$(GCC_SUFFIX)
 CPP = $(GCC_PREFIX)/g++$(GCC_SUFFIX)
 CXX = $(CPP)
-HEADERS = $(wildcard *.h)
+HEADERS := $(wildcard *.h)
 BOWTIE_MM = 1
 BOWTIE_SHARED_MEM = 0
+
+ARCH := $(shell uname -m)
 
 # Detect Cygwin or MinGW
 WINDOWS = 0
@@ -88,6 +90,8 @@ ifeq (1,$(MINGW))
 	INSPECT_LIBS = 
 endif
 
+
+# Setup SRA library
 USE_SRA = 0
 SRA_DEF =
 SRA_LIB =
@@ -103,6 +107,7 @@ ifeq (1,$(USE_SRA))
 	SEARCH_LIBS += -L$(NCBI_NGS_DIR)/lib64 -L$(NCBI_VDB_DIR)/lib64
 endif
 
+#
 LIBS = $(PTHREAD_LIB)
 
 SHARED_CPPS = ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp \
@@ -153,14 +158,15 @@ HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
 
-SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
+SEARCH_FRAGMENTS := $(wildcard search_*_phase*.c)
 VERSION := $(shell cat HISAT2_VERSION)
 
 # Convert BITS=?? to a -m flag
 BITS=32
-ifeq (x86_64,$(shell uname -m))
+ifeq (x86_64, $(ARCH))
 BITS=64
 endif
+
 # msys will always be 32 bit so look at the cpu arch instead.
 ifneq (,$(findstring AMD64,$(PROCESSOR_ARCHITEW6432)))
 	ifeq (1,$(MINGW))
@@ -176,7 +182,12 @@ endif
 ifeq (64,$(BITS))
 	BITS_FLAG = -m64
 endif
-SSE_FLAG=-msse2
+
+SSE_FLAG := -msse2
+ifeq (aarch64, $(ARCH))
+	SSE_FLAG :=
+	BITS_FLAG :=
+endif
 
 DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG)
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""

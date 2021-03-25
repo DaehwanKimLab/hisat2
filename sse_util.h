@@ -24,7 +24,7 @@
 #include "ds.h"
 #include "limit.h"
 #include <iostream>
-#include <emmintrin.h>
+#include "sse_wrap.h"
 
 class EList_m128i {
 public:

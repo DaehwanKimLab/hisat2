@@ -549,7 +549,7 @@ struct USE_POPCNT_INSTRUCTION {
 #ifdef USING_MSC_COMPILER
 		count = __popcnt64(x);
 #else
-        asm ("popcntq %[x],%[count]\n": [count] "=&r" (count): [x] "r" (x));
+        count = __builtin_popcountll(x);
 #endif
         return (int)count;
     }
