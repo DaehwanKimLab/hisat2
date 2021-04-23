@@ -31,7 +31,7 @@ bool uniqueOnly = false;
 bool multipleOnly = false;
 bool CG_only = false;
 int nThreads = 1;
-long long int loadingBlockSize = 3000000;
+long long int loadingBlockSize = 1000000;
 char convertFrom = '0';
 char convertTo = '0';
 char convertFromComplement;
@@ -225,6 +225,7 @@ int hisat_3n()
     string samChromosome; // the chromosome name of current SAM line.
     long long int samPos; // the position of current SAM line.
     long long int reloadPos; // the position in reference that we need to reload.
+
     if (samFile.is_open()) {
         while (samFile.good()) {
             positions->getFreeStringPointer(line);
@@ -304,7 +305,6 @@ int main(int argc, const char** argv)
     try {
         parseOptions(argc, argv);
         ret = hisat_3n();
-
     } catch(std::exception& e) {
         cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
         cerr << "Command: ";

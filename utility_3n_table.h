@@ -129,7 +129,7 @@ class MD_tag : public string_search {
 public:
 
     bool getNextSegment(string& seg) {
-        if (start == stringLen) {
+        if (start >= stringLen) {
             return false;
         }
         seg.clear();
@@ -137,7 +137,8 @@ public:
         bool deletion = false;
 
         while (true) {
-            if (start >= stringLen) {
+            if (currentIndex >= stringLen) {
+                start = currentIndex + 1;
                 return !seg.empty();
             }
             if (seg.empty() && s[currentIndex] == '0') {
@@ -191,6 +192,16 @@ class SafeQueue {
 private:
     mutex mutex_;
     queue<T> queue_;
+
+    string getReadName(string* line){
+        int startPosition = 0;
+        int endPosition;
+
+        endPosition = line->find("\t", startPosition);
+        string readName = line->substr(startPosition, endPosition - startPosition);
+        return readName;
+    }
+
 public:
     void pop() {
         mutex_.lock();

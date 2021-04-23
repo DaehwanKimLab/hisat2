@@ -50,6 +50,7 @@ public:
     vector<PosQuality> bases;
     CIGAR cigarString;
     MD_tag MD;
+    string readName;
 
     void initialize() {
         chromosome.clear();
@@ -64,6 +65,7 @@ public:
         mapQ.clear();
         NH = -1;
         bases.clear();
+        readName = "0";
     }
 
     /**
@@ -79,6 +81,17 @@ public:
     }
 
     /**
+     * generate a hash value for readName
+     */
+     /*void getNameHash(string& readName) {
+         readNameID = 0;
+         int nameLength = readName.size();
+         for (int i = nameLength-1; i >= 0; i--) {
+             readNameID += (int)readName[i] * (i+1);
+         }
+     }*/
+
+    /**
      * extract the information from SAM line to Alignment.
      */
      void parseInfo(string* line) {
@@ -87,7 +100,10 @@ public:
         int count = 0;
 
         while ((endPosition = line->find("\t", startPosition)) != string::npos) {
-            if (count == 1) {
+            if (count == 0) {
+                readName = line->substr(startPosition, endPosition - startPosition);
+                //getNameHash(readName);
+            } else if (count == 1) {
                 flag = stoi(line->substr(startPosition, endPosition - startPosition));
                 mapped = (flag & 4) == 0;
             } else if (count == 2) {

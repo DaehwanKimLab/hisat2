@@ -44,6 +44,8 @@ public:
     char strand; // +(REF) or -(REF-RC)
     string convertedQualities; // each char is a mapping quality on this position for converted base.
     string unconvertedQualities; // each char is a mapping quality on this position for unconverted base.
+    vector<string> readNames; // each value represent a readName which contributed the base information.
+                              // readNameIDs is to make sure no read contribute 2 times in same position.
 
     void initialize() {
         chromosome.clear();
@@ -51,6 +53,7 @@ public:
         strand = '?';
         convertedQualities.clear();
         unconvertedQualities.clear();
+        readNames.clear();
     }
 
     Position(){
@@ -78,14 +81,57 @@ public:
     }
 
     /**
+     * binary search of readName in readNames.
+     * always return a index.
+     * if cannot find, return the index which has bigger value than input readName.
+     */
+    int searchReadName (string&readName, int start, int end) {
+        if (readNames.empty()) {
+            return 0;
+        }
+        if (start <= end) {
+            int middle = (start + end) / 2;
+            if (readNames[middle] == readName) {
+                return middle;
+            }
+            if (readNames[middle] > readName) {
+                return searchReadName(readName, start, middle-1);
+            }
+            return searchReadName(readName, middle+1, end);
+        }
+        return start; // return the bigger one
+    }
+
+    /**
+     * with a input readName, add it into readNames.
+     * if the input readName already exist in readNames, return false.
+     */
+    bool appendReadName(string& readName) {
+        int idCount = readNames.size();
+        if (idCount == 0 || readName > readNames.back()) {
+            readNames.push_back(readName);
+            return true;
+        }
+        int index = searchReadName(readName, 0, readNames.size());
+        if (readNames[index] == readName) {
+            return false;
+        } else {
+            readNames.insert(readNames.begin()+index, readName);
+            return true;
+        }
+    }
+
+    /**
      * append the SAM information into this position.
      */
-    void appendBase (PosQuality& input) {
+    void appendBase (PosQuality& input, string& readName) {
         mutex_.lock();
-        if (input.converted) {
-            convertedQualities += input.qual;
-        } else {
-            unconvertedQualities += input.qual;
+        if (appendReadName(readName)) {
+            if (input.converted) {
+                convertedQualities += input.qual;
+            } else {
+                unconvertedQualities += input.qual;
+            }
         }
         mutex_.unlock();
     }
@@ -247,6 +293,7 @@ public:
             if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                 returnPosition(refPositions[index]);
             } else {
+                refPositions[index]->readNames.clear();
                 outputPositionPool.push(refPositions[index]);
             }
         }
@@ -347,7 +394,7 @@ public:
                 // this is for CG-only mode. read has a 'C' or 'G' but not 'CG'.
                 continue;
             }
-            pos->appendBase(newAlignment.bases[i]);
+            pos->appendBase(newAlignment.bases[i], newAlignment.readName);
         }
     }
 
