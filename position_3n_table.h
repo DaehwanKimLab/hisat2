@@ -356,9 +356,6 @@ public:
      * if we meet next chromosome, return false. Else, return ture.
      */
     void loadMore() {
-        while (outputPositionPool.size() >= 10000) {
-            this_thread::sleep_for (std::chrono::microseconds(1));
-        }
         refCoveredPosition += loadingBlockSize;
         string line;
         while (refFile.good()) {
@@ -425,6 +422,9 @@ public:
      * get a Position pointer from freePositionPool, if freePositionPool is empty, make a new Position pointer.
      */
     void getFreePosition(Position*& newPosition) {
+        while (outputPositionPool.size() >= 10000) {
+            this_thread::sleep_for (std::chrono::microseconds(1));
+        }
         if (freePositionPool.popFront(newPosition)) {
             return;
         } else {
