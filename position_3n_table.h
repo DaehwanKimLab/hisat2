@@ -44,7 +44,7 @@ public:
     char strand; // +(REF) or -(REF-RC)
     string convertedQualities; // each char is a mapping quality on this position for converted base.
     string unconvertedQualities; // each char is a mapping quality on this position for unconverted base.
-    vector<string> readNames; // each value represent a readName which contributed the base information.
+    vector<unsigned int> readNameIDs; // each value represent a readName which contributed the base information.
                               // readNameIDs is to make sure no read contribute 2 times in same position.
 
     void initialize() {
@@ -53,20 +53,20 @@ public:
         strand = '?';
         convertedQualities.clear();
         unconvertedQualities.clear();
-        readNames.clear();
-        readNames.resize(10);
+        readNameIDs.resize(10);
+        readNameIDs.clear();
     }
 
     Position(){
         initialize();
     };
 
-    void cleanReadNames() {
+    /*void cleanReadNames() {
         mutex_.lock();
         readNames.clear();
         readNames.resize(10);
         mutex_.unlock();
-    }
+    }*/
 
     /**
      * return true if there is mapping information in this reference position.
@@ -89,42 +89,42 @@ public:
     }
 
     /**
-     * binary search of readName in readNames.
+     * binary search of readNameID in readNameIDs.
      * always return a index.
-     * if cannot find, return the index which has bigger value than input readName.
+     * if cannot find, return the index which has bigger value than input readNameID.
      */
-    int searchReadName (string&readName, int start, int end) {
-        if (readNames.empty()) {
+    int searchReadNameID (unsigned long long&readNameID, int start, int end) {
+        if (readNameIDs.empty()) {
             return 0;
         }
         if (start <= end) {
             int middle = (start + end) / 2;
-            if (readNames[middle] == readName) {
+            if (readNameIDs[middle] == readNameID) {
                 return middle;
             }
-            if (readNames[middle] > readName) {
-                return searchReadName(readName, start, middle-1);
+            if (readNameIDs[middle] > readNameID) {
+                return searchReadNameID(readNameID, start, middle-1);
             }
-            return searchReadName(readName, middle+1, end);
+            return searchReadNameID(readNameID, middle+1, end);
         }
         return start; // return the bigger one
     }
 
     /**
-     * with a input readName, add it into readNames.
-     * if the input readName already exist in readNames, return false.
+     * with a input readNameID, add it into readNameIDs.
+     * if the input readNameID already exist in readNameIDs, return false.
      */
-    bool appendReadName(string& readName) {
-        int idCount = readNames.size();
-        if (idCount == 0 || readName > readNames.back()) {
-            readNames.push_back(readName);
+    bool appendReadNameID(unsigned long long& readNameID) {
+        int idCount = readNameIDs.size();
+        if (idCount == 0 || readNameID > readNameIDs.back()) {
+            readNameIDs.push_back(readNameID);
             return true;
         }
-        int index = searchReadName(readName, 0, readNames.size());
-        if (readNames[index] == readName) {
+        int index = searchReadNameID(readNameID, 0, idCount);
+        if (readNameIDs[index] == readNameID) {
             return false;
         } else {
-            readNames.insert(readNames.begin()+index, readName);
+            readNameIDs.insert(readNameIDs.begin()+index, readNameID);
             return true;
         }
     }
@@ -132,9 +132,9 @@ public:
     /**
      * append the SAM information into this position.
      */
-    void appendBase (PosQuality& input, string& readName) {
+    void appendBase (PosQuality& input, Alignment& a) {
         mutex_.lock();
-        if (appendReadName(readName)) {
+        if (appendReadNameID(a.readNameID)) {
             if (input.converted) {
                 convertedQualities += input.qual;
             } else {
@@ -301,7 +301,8 @@ public:
             if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                 returnPosition(refPositions[index]);
             } else {
-                refPositions[index]->readNames.clear();
+                refPositions[index]->readNameIDs.resize(10);
+                refPositions[index]->readNameIDs.clear();
                 outputPositionPool.push(refPositions[index]);
             }
         }
@@ -403,7 +404,7 @@ public:
                 // this is for CG-only mode. read has a 'C' or 'G' but not 'CG'.
                 continue;
             }
-            pos->appendBase(newAlignment.bases[i], newAlignment.readName);
+            pos->appendBase(newAlignment.bases[i], newAlignment);
         }
     }
 
