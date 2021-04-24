@@ -44,7 +44,7 @@ public:
     char strand; // +(REF) or -(REF-RC)
     string convertedQualities; // each char is a mapping quality on this position for converted base.
     string unconvertedQualities; // each char is a mapping quality on this position for unconverted base.
-    vector<unsigned int> readNameIDs; // each value represent a readName which contributed the base information.
+    vector<unsigned long long> readNameIDs; // each value represent a readName which contributed the base information.
                               // readNameIDs is to make sure no read contribute 2 times in same position.
 
     void initialize() {
@@ -53,8 +53,7 @@ public:
         strand = '?';
         convertedQualities.clear();
         unconvertedQualities.clear();
-        readNameIDs.resize(10);
-        readNameIDs.clear();
+        vector<unsigned long long>().swap(readNameIDs);
     }
 
     Position(){
@@ -301,8 +300,7 @@ public:
             if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                 returnPosition(refPositions[index]);
             } else {
-                refPositions[index]->readNameIDs.resize(10);
-                refPositions[index]->readNameIDs.clear();
+                vector<unsigned long long>().swap(refPositions[index]->readNameIDs);
                 outputPositionPool.push(refPositions[index]);
             }
         }
