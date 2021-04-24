@@ -61,6 +61,13 @@ public:
         initialize();
     };
 
+    void cleanReadNames() {
+        mutex_.lock();
+        readNames.clear();
+        readNames.resize(10);
+        mutex_.unlock();
+    }
+
     /**
      * return true if there is mapping information in this reference position.
      */
@@ -349,6 +356,9 @@ public:
      * if we meet next chromosome, return false. Else, return ture.
      */
     void loadMore() {
+        while (outputPositionPool.size() >= 10000) {
+            this_thread::sleep_for (std::chrono::microseconds(1));
+        }
         refCoveredPosition += loadingBlockSize;
         string line;
         while (refFile.good()) {
@@ -370,6 +380,7 @@ public:
             }
         }
     }
+
 
     /**
      * add position information from Alignment into ref position.
