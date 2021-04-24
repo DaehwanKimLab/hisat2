@@ -54,6 +54,7 @@ public:
         convertedQualities.clear();
         unconvertedQualities.clear();
         readNames.clear();
+        readNames.resize(10);
     }
 
     Position(){
