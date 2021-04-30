@@ -229,8 +229,12 @@ int hisat_3n()
     if (samFile.is_open()) {
         while (samFile.good()) {
             positions->getFreeStringPointer(line);
-            getline(samFile, *line);
-            if (line->front() == '@') {
+            if (!getline(samFile, *line)) {
+                positions->returnLine(line);
+                continue;
+            }
+            //getline(samFile, *line);
+            if (line->empty() || line->front() == '@') {
                 positions->returnLine(line);
                 continue;
             }
@@ -239,7 +243,7 @@ int hisat_3n()
                 this_thread::sleep_for (std::chrono::microseconds(1));
             }
             // if the SAM line is empty or unmapped, get the next SAM line.
-            if (line->empty() || !getSAMChromosomePos(line, samChromosome, samPos)) {
+            if (!getSAMChromosomePos(line, samChromosome, samPos)) {
                 positions->returnLine(line);
                 continue;
             }
