@@ -11,12 +11,11 @@ Rapid advances in next-generation sequencing technologies have dramatically chan
 ![](HISAT2-genotype.png)
 
 For more information, see the following websites:
-* [HISAT2 website](http://ccb.jhu.edu/software/hisat2)
-* [HISAT-genotype website](http://ccb.jhu.edu/software/hisat-genotype)
+* [HISAT2 website](https://daehwankimlab.github.io/hisat2)
+* [HISAT-genotype website](https://daehwankimlab.github.io/hisat-genotype)
 
 ## HISAT2
-HISAT2 is a fast and sensitive alignment program for mapping next-generation sequencing reads (whole-genome, transcriptome, and exome sequencing data) to a population of human genomes (as well as to a single reference genome). Based on an extension of BWT for a graph [1], we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover human population). These small indexes (called local indexes) combined with several alignment strategies enable effective alignment of sequencing reads. This new indexing scheme is called Hierarchical Graph FM index (HGFM). We have developed HISAT2 based on the HISAT [2] and Bowtie 2 [3] implementations.  See the [HISAT2 website](http://ccb.jhu.edu/software/hisat2/index.shtml) for
-more information.
+HISAT2 is a fast and sensitive alignment program for mapping next-generation sequencing reads (whole-genome, transcriptome, and exome sequencing data) to a population of human genomes (as well as to a single reference genome). Based on an extension of BWT for a graph [1], we designed and implemented a graph FM index (GFM), an original approach and its first implementation to the best of our knowledge. In addition to using one global GFM index that represents general population, HISAT2 uses a large set of small GFM indexes that collectively cover the whole genome (each index representing a genomic region of 56 Kbp, with 55,000 indexes needed to cover human population). These small indexes (called local indexes) combined with several alignment strategies enable effective alignment of sequencing reads. This new indexing scheme is called Hierarchical Graph FM index (HGFM). We have developed HISAT2 based on the HISAT [2] and Bowtie 2 [3] implementations.  See the [HISAT2 website](https://daehwankimlab.github.io/hisat2) for more information.
 
 A few notes:
 
