@@ -19,10 +19,10 @@ HISAT2 indexes are hosted on AWS (Amazon Web Services), thanks to the AWS Public
 ### {{ item.organism }}
   {% for data in item.data %}
 <li>{{ data[0] }}</li>
-<table style="border-collapse: collapse; border: none;">
+<table class="table-noborder">
 {% for genome in data[1] %}
-<tr style="border: none;"><td style="border: none;">{{ genome[0] }}</td>
-  <td style="border: none;">
+<tr><td>{{ genome[0] }}</td>
+  <td>
   {% for url in genome[1] %}
   <a href="{{ url[1] }}">{{ url[1] }}</a><br/>
   {% endfor %}

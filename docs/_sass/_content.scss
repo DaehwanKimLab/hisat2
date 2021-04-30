@@ -200,4 +200,11 @@
             }
         }
     }
+
+    .table-noborder {
+        table, tbody, td, tr, th {
+            border-collapse: collapse;
+            border: none;
+        }
+    }
 }

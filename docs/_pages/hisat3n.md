@@ -207,8 +207,20 @@ this number is equal to the length of unconvertedBaseQualities.
     1      11878  +         FFFBB//F/BB               11                                                0
     1      11879  +                                   0                     FFFBB//FB/                  10
     1      11880  -         F                         1                     FFFF/                       5
-[SAMtools]:        http://samtools.sourceforge.net
 
+
+
+Download
+========
+You can download pre-built HISAT-3N indexes.  
+
+- GRCh38
+
+{:.table-noborder}
+| :--- | :--- |
+| genome_3n | <https://zenodo.org/record/4711458/files/grch38_3n.tar.gz?download=1> |
+| genome_3n_rep | <https://zenodo.org/record/4711458/files/grch38_3n_rep.tar.gz?download=1> |
+  
 Publication
 ============
 
