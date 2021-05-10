@@ -164,7 +164,7 @@ HISAT2_QUANT_CPPS_MAIN = $(QUANT_CPPS) hisat2_quant_main.cpp
 HISAT2_DIFFEXPR_CPPS_MAIN = $(BUILD_CPPS) hisat2_diffexpr_main.cpp
 
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
-VERSION = $(shell cat VERSION)
+VERSION := $(shell cat HISAT2_VERSION)
 
 # Convert BITS=?? to a -m flag
 BITS=32
@@ -268,7 +268,7 @@ GENERAL_LIST = $(wildcard scripts/*.sh) \
 	MANUAL \
 	MANUAL.markdown \
 	TUTORIAL \
-	VERSION
+	HISAT2_VERSION
 
 ifeq (1,$(WINDOWS))
 	HISAT2_BIN_LIST := $(HISAT2_BIN_LIST) hisat2.bat hisat2-build.bat hisat2-inspect.bat 
@@ -309,8 +309,8 @@ quant: hisat2-quant-bin
 quant-debug: hisat2-quant-bin-debug
 
 
-DEFS=-fno-strict-aliasing \
-     -DHISAT2_VERSION="\"`cat VERSION`\"" \
+DEFS :=-fno-strict-aliasing \
+     -DHISAT2_VERSION="\"`cat HISAT2_VERSION`\"" \
      -DBUILD_HOST="\"`hostname`\"" \
      -DBUILD_TIME="\"`date`\"" \
      -DCOMPILER_VERSION="\"`$(CXX) -v 2>&1 | tail -1`\"" \
