@@ -39,6 +39,7 @@ class Alignment {
 public:
     string chromosome;
     long long int location;
+    long long int mateLocation;
     int flag;
     bool mapped;
     char strand;
@@ -51,10 +52,14 @@ public:
     CIGAR cigarString;
     MD_tag MD;
     unsigned long long readNameID;
+    int sequenceCoveredLength; // the sum of number is cigarString;
+    bool overlap; // if the segment could overlap with the mate segment.
+    bool paired;
 
     void initialize() {
         chromosome.clear();
         location = -1;
+        mateLocation = -1;
         flag = -1;
         mapped = false;
         MD.initialize();
@@ -66,6 +71,9 @@ public:
         NH = -1;
         bases.clear();
         readNameID = 0;
+        sequenceCoveredLength = 0;
+        overlap = false;
+        paired = false;
     }
 
     /**
@@ -84,10 +92,11 @@ public:
      * generate a hash value for readName
      */
      void getNameHash(string& readName) {
-         readNameID = 0;
-         for (int i = 0; i < readName.size(); i++) {
-             readNameID = (readNameID << 6) | int(readName[i]);
-         }
+        readNameID = 0;
+        int a = 63689;
+        for (size_t i = 0; i < readName.size(); i++) {
+            readNameID = (readNameID * a) + (int)readName[i];
+        }
      }
 
     /**
@@ -105,6 +114,7 @@ public:
             } else if (count == 1) {
                 flag = stoi(line->substr(startPosition, endPosition - startPosition));
                 mapped = (flag & 4) == 0;
+                paired = (flag & 1) != 0;
             } else if (count == 2) {
                 chromosome = line->substr(startPosition, endPosition - startPosition);
             } else if (count == 3) {
@@ -118,6 +128,8 @@ public:
                 }
             } else if (count == 5) {
                 cigarString.loadString(line->substr(startPosition, endPosition - startPosition));
+            } else if (count == 7) {
+                mateLocation = stoll(line->substr(startPosition, endPosition - startPosition));
             } else if (count == 9) {
                 sequence = line->substr(startPosition, endPosition - startPosition);
             } else if (count == 10) {
@@ -135,6 +147,22 @@ public:
             count++;
         }
      }
+
+     /**
+      * change the overlap = true, if the read is not uniquely mapped or the read segment is overlap to it's mate.
+      */
+      void checkOverlap() {
+          if (!unique) {
+              overlap = true;
+          } else {
+              if (paired && (location + sequenceCoveredLength >= mateLocation)) {
+                  overlap = true;
+              } else {
+                  overlap = false;
+              }
+          }
+      }
+
 
     /**
      * parse the sam line to alignment information
@@ -210,8 +238,10 @@ public:
 
         char cigarSymbol;
         int cigarLen;
+        sequenceCoveredLength = 0;
 
         while (cigarString.getNextSegment(cigarLen, cigarSymbol)) {
+            sequenceCoveredLength += cigarLen;
             if (cigarSymbol == 'S') {
                 if (readPos == 0) { // soft clip is at the begin of the read
                     returnPos = cigarLen;
