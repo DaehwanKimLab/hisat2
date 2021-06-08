@@ -114,13 +114,13 @@ For human genome reference, HISAT-3N requires about 9GB for alignment with stand
     
 #### Examples:
 * Single-end slam-seq reads (T to C conversion) alignment with standard 3N-index:  
-`hisat-3n --index genome -f -U read.fa -S output.sam --base-change T,C`
+`hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C`
 
 * Paired-end bisulfite-seq reads (C to T conversion) alignment with repeat 3N-index:   
-`hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S output.sam --base-change C,T`
+`hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T`
 
 * Single-end TAPS reads (have C to T conversion) alignment with repeat 3N-index and only output unique aligned result:   
-`hisat-3n --index genome -q -U read.fq -S output.sam --base-change C,T --unique`
+`hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --unique`
 
 
 
@@ -139,21 +139,21 @@ To generate 3N-conversion-table, users need to sort the SAM file which generated
 
 Use `samtools sort` to convert the SAM file to a sorted SAM file.
 
-    samtools sort output.sam -o output_sorted.sam -O sam
+    samtools sort alignment_result.sam -o sorted_alignment_result.sam -O sam
     
 Generate 3N-conversion-table with `hisat-3n-table`:
 
 ### Usage
-    hisat-3n-table [options]* --sam <samFile> --ref <refFile> --table-name <tableFile> --base-change <char1,char2>
+    hisat-3n-table [options]* --alignments <alignmentFile> --ref <refFile> --output-name <outputFile> --base-change <char1,char2>
 
 #### Main arguments
-* `--sam <samFile>`   
-  The sorted SAM file processed by samtools.
+* `--alignments <alignmentFile>`   
+  SORTED SAM file. Please enter `-` for standard input.
 
 * `--ref <refFile>`  
   The reference genome file (FASTA format) for generating HISAT-3N index. 
   
-* `--table-name <tableFile>`  
+* `--output-name <outputFile>`  
   Filename to write 3N-conversion-table (tsv format) to.
   
 * `--base-change <char1,char2>`  
@@ -178,11 +178,17 @@ Generate 3N-conversion-table with `hisat-3n-table`:
   
 
 #### Examples:
-* Generate 3N conversion table for bisulfite sequencing data:
-`hisat-3n-table -p 16 --sam output_sorted.sam --ref genome.fa --table-name output.tsv --base-change C,T`
+* Generate 3N conversion table for bisulfite sequencing data:  
+`hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T`
 
 * Generate 3N-conversion-table for TAPS data and only count base in CpG island and uniquely aligned:  
-`hisat-3n-table -p 16 --sam output_sorted.sam --ref genome.fa --table-name output.tsv --base-change C,T --CG-only --unique-only`
+`hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T --CG-only --unique-only`
+  
+* Generate 3N conversion table for bisulfite sequencing data from sorted BAM file:  
+`samtools view -h sorted_alignment_result.bam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
+
+* Generate 3N conversion table for bisulfite sequencing data from unsorted BAM file:  
+  `samtools sort alignment_result.bam -O sam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
   
 
 #### Note:
