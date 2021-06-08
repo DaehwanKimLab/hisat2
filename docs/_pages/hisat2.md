@@ -13,7 +13,7 @@ share: false
 
 HISAT-3N is a software system for analyzing nucleotide conversion sequencing reads. See the [HISAT-3N] for more details.
 
-[HISAT-3N]:	{{ site.baseurl }}{% link _pages/hisat3n.md %}
+[HISAT-3N]:	{{ site.baseurl }}{% link _pages/hisat-3n.md %}
 
 ### Index files are moved to the AWS Public Dataset Program. 9/3/2020
 
