@@ -216,7 +216,7 @@ bool getSAMChromosomePos(string* line, string& chr, long long int& pos) {
 }*/
 
 
-int hisat_3n()
+int hisat_3n_table()
 {
     positions = new Positions(refFileName, nThreads);
 
@@ -244,6 +244,7 @@ int hisat_3n()
     string samChromosome; // the chromosome name of current SAM line.
     long long int samPos; // the position of current SAM line.
     long long int reloadPos; // the position in reference that we need to reload.
+    long long int lastPos = 0; // the position on last SAM line. compare lastPos with samPos to make sure the SAM is sorted.
 
     //if (alignmentFile->is_open()) {
     while (alignmentFile->good()) {
@@ -277,6 +278,7 @@ int hisat_3n()
             positions->moveAllToOutput();
             positions->loadNewChromosome(samChromosome);
             reloadPos = loadingBlockSize;
+            lastPos = 0;
         }
         // if the samPos is larger than reloadPos, load 1 loadingBlockSize bp in from reference.
         while (samPos > reloadPos) {
@@ -288,7 +290,12 @@ int hisat_3n()
             positions->loadMore();
             reloadPos += loadingBlockSize;
         }
+        if (lastPos > samPos) {
+            cerr << "The input alignment file is not sorted. Please use sorted SAM file as alignment file." << endl;
+            throw 1;
+        }
         positions->linePool.push(line);
+        lastPos = samPos;
     }
     //}
     if (!standardInMode) {
@@ -330,7 +337,7 @@ int main(int argc, const char** argv)
 
     try {
         parseOptions(argc, argv);
-        ret = hisat_3n();
+        ret = hisat_3n_table();
     } catch(std::exception& e) {
         cerr << "Error: Encountered exception: '" << e.what() << "'" << endl;
         cerr << "Command: ";
