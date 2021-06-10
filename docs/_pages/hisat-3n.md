@@ -185,10 +185,10 @@ Generate 3N-conversion-table with `hisat-3n-table`:
   `hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T --CG-only --unique-only`
 
 * Generate 3N conversion table for bisulfite sequencing data from sorted BAM file:  
-  `samtools view -h sorted_alignment_result.bam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
+  `samtools view -h sorted_alignment_result.bam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
 
 * Generate 3N conversion table for bisulfite sequencing data from unsorted BAM file:  
-  `samtools sort alignment_result.bam -O sam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
+  `samtools sort alignment_result.bam -O sam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
 
 
 #### Note:
@@ -218,7 +218,8 @@ There are 7 columns in the 3N-conversion-table:
 Publication
 ============
 
-* HISAT-3N paper
-
+* HISAT-3N paper  
+  Zhang, Y., Park, C., Bennett, C., Thornton, M., & Kim, D. (2021). [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120). Genome research, gr.275193.120. Advance online publication.
+  
 * HIAST2 paper  
   Kim, D., Paggi, J.M., Park, C. _et al._ [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
