@@ -185,10 +185,10 @@ Generate 3N-conversion-table with `hisat-3n-table`:
   `hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T --CG-only --unique-only`
 
 * Generate 3N conversion table for bisulfite sequencing data from sorted BAM file:  
-  `samtools view -h sorted_alignment_result.bam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
+  `samtools view -h sorted_alignment_result.bam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
 
 * Generate 3N conversion table for bisulfite sequencing data from unsorted BAM file:  
-  `samtools sort alignment_result.bam -O sam | hisat-3n/hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
+  `samtools sort alignment_result.bam -O sam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T`
 
 
 #### Note:
