@@ -58,8 +58,6 @@ my $idx_ext_s     = 'ht2';
 my $idx_ext       = $idx_ext_s; 
 my $seq_in_args = 0;
 my $skip_read_stat = 0;
-my $base_change_opt = 0;
-my $no_base_change_opt = 0;
 my %signo       = ();
 my @signame     = ();
 
@@ -195,12 +193,7 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 	if($arg eq "-c") {
 		$seq_in_args = 1;
 	}
-	if($arg eq "--base-change") {
-		$base_change_opt = 1;
-	}
-	if($arg eq "--no-base-change") {
-		$no_base_change_opt = 1;
-	}
+
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$ht2_args[$i] = undef;
@@ -255,7 +248,6 @@ my $keep = 0;
 my $verbose = 0;
 my $readpipe = undef;
 my $log_fName = undef;
-my $help = 0;
 
 my @ht2w_args_cp = (@ht2w_args>0) ? @ht2w_args : @ht2_args;
 Getopt::Long::Configure("pass_through","no_ignore_case");
@@ -273,8 +265,7 @@ GetOptions(
 	"ref-string|reference-string=s" => \$ref_str,
 	"keep"                          => \$keep,
 	"verbose"                       => \$verbose,
-	"log-file=s"                    => \$log_fName,
-	"help|h"                        => \$help
+	"log-file=s"                    => \$log_fName
 );
 
 @ARGV = @old_ARGV;
@@ -317,13 +308,6 @@ if ((scalar(@read_files) > 0)
 		Info("Read Length String: $read_len_str\n");
 		push @ht2_args, ("--read-lengths", $read_len_str);
 	}
-}
-
-# Check options for HISAT-3N
-# --base-change or --no-base-change
-# one of the two options must be set.
-if ($base_change_opt == 0 && $help == 0) {
-	Fail("--base-change must be set\n");
 }
 
 sub check_file_exist($$$) {
@@ -546,7 +530,7 @@ else {
 }
 
 my $debug_str = ($debug ? "-debug" : "");
-
+push @ht2_args, "--3N";
 # Construct command invoking hisat2-align
 my $cmd = "'$align_prog$debug_str' --wrapper basic-0 ".join(" ", @ht2_args);
 

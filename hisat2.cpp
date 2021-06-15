@@ -304,6 +304,7 @@ static EList<size_t> readLens;
 
 // 3N variable
 bool threeN = false; // indicator for 3N mode.
+bool base_change_entered; // set true once user used --base-change
 char convertedFrom; // the nucleotide is replaced by others in sample preparation protocol. use in + strand.
 char convertedTo;   // the nucleotide to others in sample preparation protocol. use in + strand.
 char convertedToComplement; // the complement of convertedFrom. use in - strand.
@@ -556,6 +557,7 @@ static void resetOptions() {
     threeN = false;
     repeatLimit = 1000;
     uniqueOutputOnly = false;
+    base_change_entered = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -785,6 +787,7 @@ static struct option long_options[] = {
     {(char*)"base-change",     required_argument,  0,        ARG_BASE_CHANGE},
     {(char*)"repeat-limit",    required_argument,  0,        ARG_REPEAT_LIMIT},
     {(char*)"unique-only",     no_argument,        0,        ARG_UNIQUE_ONLY},
+    {(char*)"3N",              no_argument,        0,        ARG_3N},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -908,7 +911,6 @@ static void printUsage(ostream& out) {
         << endl
         << " 3N-Alignment:" << endl
         << "  --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (C,T)" << endl
-        << "  --no-base-change            run hisat-3n as regular hisat2 (off)" << endl
         << "  --repeat-limit <int>        maximum number of repeat will be expanded for repeat alignment (1000)" << endl
         << "  --unique-only               only output the reads have unique alignment (off)" << endl
 		<< endl
@@ -1825,7 +1827,7 @@ static void parseOption(int next_option, const char *arg) {
                      << "arguments to --base-change option, got " << args.size() << endl;
                 throw 1;
             }
-            threeN = true;
+            base_change_entered = true;
             convertedFrom = toupper(args[0][0]);
             convertedTo = toupper(args[1][0]);
             convertedFromComplement = asc2dnacomp[convertedFrom];
@@ -1834,6 +1836,10 @@ static void parseOption(int next_option, const char *arg) {
             asc2dna_3N[0]['c'] = 3;
             asc2dna_3N[1]['G'] = 0;
             asc2dna_3N[1]['g'] = 0;
+            break;
+        }
+        case ARG_3N: {
+            threeN = true;
             break;
         }
         case ARG_REPEAT_LIMIT: {
@@ -1893,6 +1899,10 @@ static void parseOptions(int argc, const char **argv) {
 		const char *arg = extra_opts[extra_opts_cur].second.c_str();
 		parseOption(next_option, arg);
 	}
+
+	if (showVersion) {
+	    return;
+	}
 	// Remove initial semicolons
 	while(!polstr.empty() && polstr[0] == ';') {
 		polstr = polstr.substr(1);
@@ -1900,7 +1910,18 @@ static void parseOptions(int argc, const char **argv) {
 	if(gVerbose) {
 		cerr << "Final policy string: '" << polstr.c_str() << "'" << endl;
 	}
-    
+
+	if (threeN && !base_change_entered) {
+	    cerr << "--base-change must be set for HISAT-3N" << endl;
+        printUsage(cerr);
+        throw 1;
+	}
+	if (!threeN && base_change_entered) {
+        cerr << "Please do not use --base-change for HISAT2. To align nucleotide conversion reads, please use HISAT-3N" << endl;
+        printUsage(cerr);
+        throw 1;
+	}
+
     size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
                                      polstr,
