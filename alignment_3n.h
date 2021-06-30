@@ -37,10 +37,16 @@
 #include "utility_3n.h"
 
 
-extern char convertedFrom;
-extern char convertedTo;
-extern char convertedFromComplement;
-extern char convertedToComplement;
+extern char usrInput_convertedFrom;
+extern char usrInput_convertedTo;
+extern char usrInput_convertedFromComplement;
+extern char usrInput_convertedToComplement;
+
+extern char hs3N_convertedFrom;
+extern char hs3N_convertedTo;
+extern char hs3N_convertedFromComplement;
+extern char hs3N_convertedToComplement;
+
 extern vector<ht2_handle_t> repeatHandles;
 extern struct ht2_index_getrefnames_result *refNameMap;
 extern int repeatLimit;
@@ -49,6 +55,8 @@ extern bool uniqueOutputOnly;
 using namespace std;
 
 struct ReportingMetrics;
+
+bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo);
 
 /**
  * the data structure to store all information of one alignment result.
@@ -396,9 +404,9 @@ public:
                         if (!newMD_String.empty() && isalpha(newMD_String[newMD_String.length()-1])) {
                             newMD_String.append('0');
                         }
-                        if ((readChar == convertedTo) && (refChar == convertedFrom)) {
+                        if ((readChar == usrInput_convertedTo) && (refChar == usrInput_convertedFrom)) {
                             conversionCount[0]++;
-                        } else if ((readChar == convertedToComplement) && (refChar == convertedFromComplement)) {
+                        } else if ((readChar == usrInput_convertedToComplement) && (refChar == usrInput_convertedFromComplement)) {
                             conversionCount[1]++;
                         } else {
                             // real mismatch
@@ -501,9 +509,9 @@ public:
                             MD.append('0');
                         }
 
-                        if ((readChar == convertedTo) && (refChar == convertedFrom)) {
+                        if ((readChar == usrInput_convertedTo) && (refChar == usrInput_convertedFrom)) {
                             conversionCount[0]++;
-                        } else if ((readChar == convertedToComplement) && (refChar == convertedFromComplement)) {
+                        } else if ((readChar == usrInput_convertedToComplement) && (refChar == usrInput_convertedFromComplement)) {
                             conversionCount[1]++;
                         } else {
                             // real mismatch

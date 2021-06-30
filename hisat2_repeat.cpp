@@ -41,6 +41,7 @@
 #include "mask.h"
 #include "repeat_builder.h"
 #include "alignment_3n.h"
+#include "alignment_3n.cpp"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -98,6 +99,10 @@ static bool save_sa;
 static bool load_sa;
 
 bool threeN = false;
+char convertedFrom;
+char convertedTo;
+char convertedFromComplement;
+char convertedToComplement;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -141,6 +146,10 @@ static void resetOptions() {
     load_sa = false;
     wrapper.clear();
     threeN = false;
+    convertedFrom = 'C';
+    convertedTo = 'T';
+    convertedFromComplement = asc2dnacomp[convertedFrom];
+    convertedToComplement = asc2dnacomp[convertedTo];
 }
 
 // Argument constants for getopts
@@ -176,7 +185,8 @@ enum {
     ARG_MAX_SEED_EXTLEN,
     ARG_SAVE_SA,
     ARG_LOAD_SA,
-    ARG_3N
+    ARG_3N,
+    ARG_BASE_CHANGE
 };
 
 /**
@@ -270,6 +280,7 @@ static struct option long_options[] = {
 	{(char*)"save-sa",        no_argument,       0,            ARG_SAVE_SA},
     {(char*)"load-sa",        no_argument,       0,            ARG_LOAD_SA},
     {(char*)"3N",             no_argument,       0,            ARG_3N},
+    {(char*)"base-change",    required_argument, 0,            ARG_BASE_CHANGE},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -469,6 +480,22 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_3N: {
                 threeN = true;
                 break;
+            }
+            case ARG_BASE_CHANGE: {
+                EList<string> args;
+                tokenize(optarg, ",", args);
+                if(args.size() != 2) {
+                    cerr << "Error: expected 2 comma-separated "
+                         << "arguments to --base-change option, got " << args.size() << endl;
+                    throw 1;
+                }
+                getConversion(args[0][0], args[1][0], convertedFrom, convertedTo);
+                if (convertedFrom == convertedTo) {
+                    cerr << "Please enter different nucleotide for --base-change option. If there is no nucleotide conversion, please use HISAT2." << endl;
+                    throw 1;
+                }
+                convertedFromComplement = asc2dnacomp[convertedFrom];
+                convertedToComplement   = asc2dnacomp[convertedTo];
             }
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -902,12 +929,15 @@ int hisat2_repeat(int argc, const char **argv) {
                 for (int i = 0; i < nloop; i++) {
                     string tag = "";
                     if (threeN) {
+                        tag += ".3n.";
                         if (i == 0) {
-                            tag = ".3n.1";
-                            baseChange.convert('C', 'T');
+                            tag += convertedFrom;
+                            tag += convertedTo;
+                            baseChange.convert(convertedFrom, convertedTo);
                         } else {
-                            tag = ".3n.2";
-                            baseChange.convert('G', 'A');
+                            tag += convertedFromComplement;
+                            tag += convertedToComplement;
+                            baseChange.convert(convertedFromComplement, convertedToComplement);
                         }
                     }
                     driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);

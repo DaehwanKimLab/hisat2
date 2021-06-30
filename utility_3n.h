@@ -131,4 +131,5 @@ public:
     char& getLabel() { return label; }
 };
 
+
 #endif //HISAT2_UTILITY_3N_H

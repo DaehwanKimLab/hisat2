@@ -1588,10 +1588,10 @@ bool GenomeHit<index_t>::combineWith(
         if (((rd.threeN_cycle == threeN_CT_FW || rd.threeN_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
             ((rd.threeN_cycle == threeN_CT_RC || rd.threeN_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
             // C to T conversion
-            refConversion_3N[1] = 3;
+            refConversion_3N[asc2dna[hs3N_convertedFrom]] = asc2dna[hs3N_convertedTo];
         } else {
-            //G to A conversion
-            refConversion_3N[2] = 0;
+            // G to A conversion
+            refConversion_3N[asc2dna[hs3N_convertedFromComplement]] = asc2dna[hs3N_convertedToComplement];
         }
     }
 
@@ -2852,10 +2852,11 @@ index_t GenomeHit<index_t>::alignWithALTs_recur(
     if (threeN){
         if (cycle_3N == 0 || cycle_3N == 3) {
             // C to T conversion
-            refConversion_3N[1] = 3;
+            refConversion_3N[asc2dna[hs3N_convertedFrom]] = asc2dna[hs3N_convertedTo];
         } else {
             //G to A conversion
-            refConversion_3N[2] = 0;
+            refConversion_3N[asc2dna[hs3N_convertedFromComplement]] = asc2dna[hs3N_convertedToComplement];
+
         }
     }
 
@@ -3716,10 +3717,10 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
         if (((rd.threeN_cycle == threeN_CT_FW || rd.threeN_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
             ((rd.threeN_cycle == threeN_CT_RC || rd.threeN_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
             // C to T conversion
-            refConversion_3N[1] = 3;
+            refConversion_3N[asc2dna[hs3N_convertedFrom]] = asc2dna[hs3N_convertedTo];
         } else {
             //G to A conversion
-            refConversion_3N[2] = 0;
+            refConversion_3N[asc2dna[hs3N_convertedFromComplement]] = asc2dna[hs3N_convertedToComplement];
         }
     }
 

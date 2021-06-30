@@ -305,10 +305,19 @@ static EList<size_t> readLens;
 // 3N variable
 bool threeN = false; // indicator for 3N mode.
 bool base_change_entered; // set true once user used --base-change
-char convertedFrom; // the nucleotide is replaced by others in sample preparation protocol. use in + strand.
-char convertedTo;   // the nucleotide to others in sample preparation protocol. use in + strand.
-char convertedToComplement; // the complement of convertedFrom. use in - strand.
-char convertedFromComplement; // the complement of convertedTo. use in - strand.
+
+char usrInput_convertedFrom; // user input converted from. the nucleotide is replaced by others in sample preparation protocol.
+char usrInput_convertedTo;   // user input converted To. the nucleotide to others in sample preparation protocol.
+char usrInput_convertedToComplement; // the complement of usrInput_convertedFrom
+char usrInput_convertedFromComplement; // the complement of usrInput_convertedTo
+
+char hs3N_convertedFrom; // the actual converted from by HISAT-3N.
+char hs3N_convertedTo;   // the actual converted to by HISAT-3N.
+char hs3N_convertedToComplement; // the complement of hs3N_convertedFrom. use in - strand.
+char hs3N_convertedFromComplement; // the complement of hs3N_convertedTo. use in - strand.
+
+string threeN_indexTags[2];
+
 vector<ht2_handle_t> repeatHandles; // the 2 repeat handles helps expand the repeat alignment information. 0 for + strand. 1 for - strand.
 struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's index for repeat alignment.
 int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
@@ -316,6 +325,10 @@ bool uniqueOutputOnly; // only output the unique alignment result.
 
 
 #define DMAX std::numeric_limits<double>::max()
+
+inline bool fileExist (const string& name) {
+    return ( access( name.c_str(), F_OK ) != -1 );
+}
 
 static void resetOptions() {
 	mates1.clear();
@@ -558,6 +571,8 @@ static void resetOptions() {
     repeatLimit = 1000;
     uniqueOutputOnly = false;
     base_change_entered = false;
+    threeN_indexTags[0] = ".3n.";
+    threeN_indexTags[1] = ".3n.";
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -1828,14 +1843,26 @@ static void parseOption(int next_option, const char *arg) {
                 throw 1;
             }
             base_change_entered = true;
-            convertedFrom = toupper(args[0][0]);
-            convertedTo = toupper(args[1][0]);
-            convertedFromComplement = asc2dnacomp[convertedFrom];
-            convertedToComplement   = asc2dnacomp[convertedTo];
-            asc2dna_3N[0]['C'] = 3;
-            asc2dna_3N[0]['c'] = 3;
-            asc2dna_3N[1]['G'] = 0;
-            asc2dna_3N[1]['g'] = 0;
+            usrInput_convertedFrom = toupper(args[0][0]);
+            usrInput_convertedTo = toupper(args[1][0]);
+
+            usrInput_convertedFromComplement = asc2dnacomp[usrInput_convertedFrom];
+            usrInput_convertedToComplement   = asc2dnacomp[usrInput_convertedTo];
+
+            getConversion(usrInput_convertedFrom, usrInput_convertedTo, hs3N_convertedFrom, hs3N_convertedTo);
+            hs3N_convertedFromComplement = asc2dnacomp[hs3N_convertedFrom];
+            hs3N_convertedToComplement   = asc2dnacomp[hs3N_convertedTo];
+
+            asc2dna_3N[0][hs3N_convertedFrom] = asc2dna[hs3N_convertedTo];
+            asc2dna_3N[0][tolower(hs3N_convertedFrom)] = asc2dna[hs3N_convertedTo];
+            asc2dna_3N[1][hs3N_convertedFromComplement] = asc2dna[hs3N_convertedToComplement];
+            asc2dna_3N[1][tolower(hs3N_convertedFromComplement)] = asc2dna[hs3N_convertedToComplement];
+
+            threeN_indexTags[0] += hs3N_convertedFrom;
+            threeN_indexTags[0] += hs3N_convertedTo;
+            threeN_indexTags[1] += hs3N_convertedFromComplement;
+            threeN_indexTags[1] += hs3N_convertedToComplement;
+
             break;
         }
         case ARG_3N: {
@@ -4768,8 +4795,24 @@ int hisat2(int argc, const char **argv) {
             }
             if (threeN) {
                 bt2indexs[1] = bt2indexs[0];
-                bt2indexs[0] += ".3n.1";
-                bt2indexs[1] += ".3n.2";
+                if (fileExist(bt2indexs[0] + threeN_indexTags[0] + ".1.ht2")) {
+                    bt2indexs[0] += threeN_indexTags[0];
+                    bt2indexs[1] += threeN_indexTags[1];
+                } else if (fileExist(bt2indexs[0] + ".3n.1.1.ht2")) {
+                    bt2indexs[0] += ".3n.1";
+                    bt2indexs[1] += ".3n.2";
+                    if (!((usrInput_convertedFrom == 'C' && usrInput_convertedTo == 'T') ||
+                          (usrInput_convertedFrom == 'T' && usrInput_convertedTo == 'C'))) {
+                        cerr << "Your current hisat-3n index only support C-to-T or T-to-C base change. Please build new hisat-3n index to support "
+                        << usrInput_convertedFrom << " to " << usrInput_convertedTo << "change." << endl;
+                        printUsage(cerr);
+                        return 1;
+                    }
+                } else {
+                    cerr << "Index is not exist, please use hisat-3n-build to build index first. Please use the same --base-change argument for both hisat-3n-build and hisat-3n." << endl;
+                    printUsage(cerr);
+                    return 1;
+                }
             }
 
 			// Get query filename

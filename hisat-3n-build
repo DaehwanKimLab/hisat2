@@ -91,29 +91,36 @@ def main():
 
     if "--repeat-index" in argv:
         #build repeat index first
-        outputName = argv[-1]
+        if argv[1].startswith('-'):
+            outputName = argv[-1]
+        else:
+            outputName = argv[2]
         nThread = "1"
         repeatLength = "100-300"
         repeatCount = "5"
         referenceName = ""
-        threeN = True
+        base_change = ""
         removeRepeatLength = False
         for i in range(len(argv)):
-            if argv[i] == "--no-base-change":
-                threeN = False
+            if argv[i] == "--base-change":
+                base_change = argv[i+1]
             if argv[i] == "-p":
                 nThread = argv[i+1]
             elif argv[i] == "-f":
                 referenceName = argv[i+1]
             elif argv[i] == "--repeat-index":
-                match = re.match(r'\d+-\d+', argv[i+1])
-                if match:
-                    repeatLength = argv[i+1]
-                    removeRepeatLength = True
+                if ("--repeat-index" != argv[-1]):
+                    match = re.match(r'\d+-\d+', argv[i+1])
+                    if match:
+                        repeatLength = argv[i+1]
+                        removeRepeatLength = True
         if removeRepeatLength:
             argv.remove(repeatLength)
         if len(referenceName) == 0:
-            referenceName = argv[-2]
+            if argv[1].startswith('-'):
+                referenceName = argv[-2]
+            else:
+                referenceName = argv[1]
         cwd = sys.path[0]
 
         repeatArgv = []
@@ -121,16 +128,15 @@ def main():
         repeatArgv += ["-p", nThread]
         repeatArgv += ["--repeat-length", repeatLength]
         repeatArgv += ["--repeat-count", repeatCount]
-        if threeN:
-            repeatArgv += ["--3N"]
+        repeatArgv += ["--base-change", base_change]
+        repeatArgv += ["--3N"]
         repeatArgv += [referenceName, outputName]
-        os.system(" ".join(repeatArgv))
+        try:
+            os.system(" ".join(repeatArgv))
+        except ValueError:
+            print("Can not automatically generate repeat index for HISAT-3N. Please manually generate repeat index by hisat2-repeat.")
 
-
-    if "--no-base-change" in argv:
-        argv.remove("--no-base-change")
-    else:
-        argv.append("--3N")
+    argv.append("--3N")
 
     argv[0] = build_bin_name
     argv.insert(1, 'basic-0')

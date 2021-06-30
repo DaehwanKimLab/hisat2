@@ -155,4 +155,36 @@ void Alignments::reportStats_paired(ReportingMetrics& met) {
     }
 }
 
+bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo) {
+    if ((usrInputFrom == 'A' && usrInputTo == 'T') ||
+        (usrInputFrom == 'A' && usrInputTo == 'C') ||
+        (usrInputFrom == 'C' && usrInputTo == 'G') ||
+        (usrInputFrom == 'C' && usrInputTo == 'T')) {
+        convertFrom = usrInputFrom;
+        convertTo = usrInputTo;
+        return false;
+    }
+    if ((usrInputFrom == 'A' && usrInputTo == 'G') ||
+        (usrInputFrom == 'G' && usrInputTo == 'T')) {
+        swap(usrInputFrom, usrInputTo);
+        convertFrom = usrInputFrom;
+        convertTo = usrInputTo;
+        return true;
+    }
+    if ((usrInputFrom == 'C' && usrInputTo == 'A') ||
+        (usrInputFrom == 'G' && usrInputTo == 'C') ||
+        (usrInputFrom == 'T' && usrInputTo == 'A') ||
+        (usrInputFrom == 'T' && usrInputTo == 'C')) {
+        swap(usrInputFrom, usrInputTo);
+        convertFrom = usrInputFrom;
+        convertTo = usrInputTo;
+        return false;
+    }
+    if ((usrInputFrom == 'G' && usrInputTo == 'A') ||
+        (usrInputFrom == 'T' && usrInputTo == 'G')){
+        convertFrom = usrInputFrom;
+        convertTo = usrInputTo;
+        return true;
+    }
+}
 
