@@ -35,8 +35,8 @@
 #include "gfm.h"
 #include "hgfm.h"
 #include "rfm.h"
-#include "alignment_3n.h"
-#include "alignment_3n.cpp"
+#include "utility_3n.h"
+
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -221,7 +221,6 @@ static void printUsage(ostream& out) {
         << "    --repeat-snp <path>     Repeat snp file name" << endl
         << "    --repeat-haplotype <path>   Repeat haplotype file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
-	    << "    --3N                    build 3N index rather than standard hisat2 index" << endl
 	    << "    --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (default:C,T)" << endl
 	    << "    --repeat-index<int>-<int>[,<int>-<int>]  automatically build repeat database and repeat index, enter the minimum-maximum repeat length pairs (default: 100-300)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
@@ -753,6 +752,11 @@ int hisat2_build(int argc, const char **argv) {
 			return 0;
 		}
 
+        if (!threeN && base_change_entered) {
+            cerr << "Please do not use --base-change for hisat2-build. To build hisat-3n index, please use hisat-3n-build." << endl;
+            printUsage(cerr);
+            throw 1;
+        }
 		// Get input filename
 		if(optind >= argc) {
 			cerr << "No input sequence or sequence file specified!" << endl;
@@ -853,6 +857,13 @@ int hisat2_build(int argc, const char **argv) {
                             tag += convertedFromComplement;
                             tag += convertedToComplement;
                             baseChange.convert(convertedFromComplement, convertedToComplement);
+                        }
+
+                        string indexFilename = outfile + tag + ".6.ht2";
+                        if (fileExist(indexFilename)) {
+                            cerr << "*** Find index for " << outfile + tag << "，skip this index building process." << endl;
+                            cerr << "    To re-build your hisat-3n index, please delete the old index manually before running hisat-3n-build." << endl;
+                            continue;
                         }
                     }
 

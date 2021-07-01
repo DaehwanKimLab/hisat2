@@ -20,6 +20,7 @@
 #include "alignment_3n.h"
 #include "aln_sink.h"
 
+
 /**
  * return true if two location is concordant.
  * return false, if there are not concordant or too far (>maxPairDistance).
@@ -152,39 +153,6 @@ void Alignments::reportStats_paired(ReportingMetrics& met) {
         met.nconcord_uni++;
         if (alignmentPositions.nBestPair == 1) { met.nconcord_uni1++; }
         else { met.nconcord_uni2++; }
-    }
-}
-
-bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo) {
-    if ((usrInputFrom == 'A' && usrInputTo == 'T') ||
-        (usrInputFrom == 'A' && usrInputTo == 'C') ||
-        (usrInputFrom == 'C' && usrInputTo == 'G') ||
-        (usrInputFrom == 'C' && usrInputTo == 'T')) {
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return false;
-    }
-    if ((usrInputFrom == 'A' && usrInputTo == 'G') ||
-        (usrInputFrom == 'G' && usrInputTo == 'T')) {
-        swap(usrInputFrom, usrInputTo);
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return true;
-    }
-    if ((usrInputFrom == 'C' && usrInputTo == 'A') ||
-        (usrInputFrom == 'G' && usrInputTo == 'C') ||
-        (usrInputFrom == 'T' && usrInputTo == 'A') ||
-        (usrInputFrom == 'T' && usrInputTo == 'C')) {
-        swap(usrInputFrom, usrInputTo);
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return false;
-    }
-    if ((usrInputFrom == 'G' && usrInputTo == 'A') ||
-        (usrInputFrom == 'T' && usrInputTo == 'G')){
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return true;
     }
 }
 

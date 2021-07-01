@@ -59,6 +59,8 @@
 #include "outq.h"
 #include "repeat_kmer.h"
 #include "hisat2lib/ht2.h"
+//#include "utility_3n.h"
+
 
 using namespace std;
 
@@ -325,10 +327,6 @@ bool uniqueOutputOnly; // only output the unique alignment result.
 
 
 #define DMAX std::numeric_limits<double>::max()
-
-inline bool fileExist (const string& name) {
-    return ( access( name.c_str(), F_OK ) != -1 );
-}
 
 static void resetOptions() {
 	mates1.clear();

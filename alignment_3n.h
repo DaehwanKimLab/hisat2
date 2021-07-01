@@ -56,8 +56,6 @@ using namespace std;
 
 struct ReportingMetrics;
 
-bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo);
-
 /**
  * the data structure to store all information of one alignment result.
  */

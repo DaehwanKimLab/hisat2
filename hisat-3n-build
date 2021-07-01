@@ -134,7 +134,7 @@ def main():
         try:
             os.system(" ".join(repeatArgv))
         except ValueError:
-            print("Can not automatically generate repeat index for HISAT-3N. Please manually generate repeat index by hisat2-repeat.")
+            print("Can not automatically generate repeat database for HISAT-3N. Please manually generate repeat database by using hisat2-repeat.")
 
     argv.append("--3N")
 

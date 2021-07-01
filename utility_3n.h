@@ -21,7 +21,6 @@
 #define HISAT2_UTILITY_3N_H
 
 #include <string>
-#include <alignment_3n.h>
 
 
 using namespace std;
@@ -52,21 +51,7 @@ class ConvertMatrix3N {
      *  convert asc2dna, asc2dnacomp, and dnacomp matrix according to convertFrom and convertTo variable.
      *  always restore the matrix to original (4 letter) matrix.
      */
-    void convertMatrix() {
-        restoreNormal();
-        for (int i = 0; i < 4; i++) {
-            char base = allBase[i];
-            char lowerBase = allBaseLower[i];
-            if (convertFrom == base) {
-                asc2dna[base] = charToInt(convertTo);
-                asc2dna[lowerBase] = charToInt(convertTo);
-            } else if (complement(convertFrom) == base) {
-                asc2dnacomp[base] = convertTo;
-                asc2dnacomp[lowerBase] = convertTo;
-                dnacomp[i] = charToInt(convertTo);
-            }
-        }
-    }
+    void convertMatrix() ;
 public:
     ConvertMatrix3N(){
 
@@ -94,17 +79,7 @@ public:
      * restore the asc2dna, asc2dnacomp, and dnacomp matrix to original (4 letter).
      * do not change the convertFrom and convertTO variable.
      */
-    void restoreNormal() {
-        for (int i = 0; i < 4; i++) {
-            char base = allBase[i];
-            char lowerBase = allBaseLower[i];
-            asc2dna[base] = charToInt(base);
-            asc2dna[lowerBase] = charToInt(base);
-            asc2dnacomp[base] = complement(base);
-            asc2dnacomp[lowerBase] = complement(base);
-            dnacomp[i] = charToInt(complement(base));
-        }
-    }
+    void restoreNormal() ;
 
     /**
      * convert the matrix according to the convertFrom and convertTo variable.
@@ -130,6 +105,9 @@ public:
 
     char& getLabel() { return label; }
 };
+
+extern bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo);
+extern bool fileExist (string name);
 
 
 #endif //HISAT2_UTILITY_3N_H

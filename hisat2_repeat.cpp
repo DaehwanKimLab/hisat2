@@ -40,8 +40,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "repeat_builder.h"
-#include "alignment_3n.h"
-#include "alignment_3n.cpp"
+#include "utility_3n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -103,6 +102,7 @@ char convertedFrom;
 char convertedTo;
 char convertedFromComplement;
 char convertedToComplement;
+bool base_change_entered;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -150,6 +150,7 @@ static void resetOptions() {
     convertedTo = 'T';
     convertedFromComplement = asc2dnacomp[convertedFrom];
     convertedToComplement = asc2dnacomp[convertedTo];
+    base_change_entered = false;
 }
 
 // Argument constants for getopts
@@ -231,6 +232,7 @@ static void printUsage(ostream& out) {
         << "    --save-sa" << endl
         << "    --load-sa" << endl
         << "    --3N                    make 3N repeat database" << endl
+        << "    --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (default:C,T)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -496,6 +498,7 @@ static void parseOptions(int argc, const char **argv) {
                 }
                 convertedFromComplement = asc2dnacomp[convertedFrom];
                 convertedToComplement   = asc2dnacomp[convertedTo];
+                base_change_entered = true;
             }
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -879,6 +882,11 @@ int hisat2_repeat(int argc, const char **argv) {
 			return 0;
 		}
 
+        if (!threeN && base_change_entered) {
+            cerr << "To build hisat-3n repeat database, please add argument --3N. To build the hisat2 repeat database, please remove the argument --base-change." << endl;
+            printUsage(cerr);
+            throw 1;
+        }
 		// Get input filename
 		if(optind >= argc) {
 			cerr << "No input sequence or sequence file specified!" << endl;
@@ -938,6 +946,13 @@ int hisat2_repeat(int argc, const char **argv) {
                             tag += convertedFromComplement;
                             tag += convertedToComplement;
                             baseChange.convert(convertedFromComplement, convertedToComplement);
+                        }
+
+                        string indexFilename = outfile + tag + ".rep.fa";
+                        if (fileExist(indexFilename)) {
+                            cerr << "*** Find repeat database for " << outfile + tag << "，skip this repeat database building process." << endl;
+                            cerr << "    To re-build your hisat-3n repeat database, please delete the old index manually before running hisat2-repeat or hisat-3n-build." << endl;
+                            continue;
                         }
                     }
                     driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);
