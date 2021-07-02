@@ -110,7 +110,8 @@ For human genome reference, HISAT-3N requires about 9GB for alignment with stand
   than 1,000,000. default: 1000.
 
 * `--unique-only`
-  Only output uniquely aligned reads.
+  Only output uniquely aligned reads. This option may conflict with the hisat2 option `--un`, `--al`,
+  `--un-conc`, and `--al-conc`. We will fix this problem in future version. Please do not use `--unique-only` if you want to use the hisat2 options above.
 
 #### Examples:
 * Single-end slam-seq reads (T to C conversion) alignment with standard 3N-index:  
@@ -213,13 +214,15 @@ There are 7 columns in the 3N-conversion-table:
     1      11878  +         FFFBB//F/BB               11                                                0
     1      11879  +                                   0                     FFFBB//FB/                  10
     1      11880  -         F                         1                     FFFF/                       5
+
 [SAMtools]:        http://samtools.sourceforge.net
 
 Publication
 ============
 
 * HISAT-3N paper  
-  Zhang, Y., Park, C., Bennett, C., Thornton, M., & Kim, D. (2021). [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120). Genome research, gr.275193.120. Advance online publication.
-  
+  Zhang, Y., C. Park, C. Bennett, M. Thornton and D. Kim [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
+
+
 * HIAST2 paper  
   Kim, D., Paggi, J.M., Park, C. _et al._ [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
