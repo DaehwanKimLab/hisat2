@@ -57,8 +57,8 @@ Example for HISAT2 index building:
 
 Examples alignment with HISAT2:
 
-    # for single-end FASTA reads alignment
-    hisat2 -f -x genome -U reads.fa -S output.sam
+    # for single-end FASTA reads DNA alignment
+    hisat2 -f -x genome -U reads.fa -S output.sam --no-spliced-alignment
 
     # for paired-end FASTQ reads alignment
     hisat2 -x genome -1 reads_1.fq -2 read2_2.fq -S output.sam

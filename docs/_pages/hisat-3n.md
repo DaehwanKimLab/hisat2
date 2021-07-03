@@ -114,13 +114,13 @@ For human genome reference, HISAT-3N requires about 9GB for alignment with stand
   `--un-conc`, and `--al-conc`. We will fix this problem in future version. Please do not use `--unique-only` if you want to use the hisat2 options above.
 
 #### Examples:
-* Single-end slam-seq reads (T to C conversion) alignment with standard 3N-index:  
+* Single-end slam-seq reads (T to C conversion, RNA) alignment with standard 3N-index:  
   `hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C`
 
-* Paired-end bisulfite-seq reads (C to T conversion) alignment with repeat 3N-index:   
+* Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with repeat 3N-index:   
   `hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T`
 
-* Single-end TAPS reads (have C to T conversion) alignment with repeat 3N-index and only output unique aligned result:   
+* Single-end TAPS reads (have C to T conversion， RNA) alignment with repeat 3N-index and only output unique aligned result:   
   `hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --unique`
 
 
