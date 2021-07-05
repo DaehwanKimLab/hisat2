@@ -221,7 +221,7 @@ Publication
 ============
 
 * HISAT-3N   
-  Zhang, Y., Park, C., Bennett, C., Thornton, M. and Kim, D [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
+  Zhang, Y., Park, C., Bennett, C., Thornton, M. and Kim, D. [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120). _Genome Research_ **31(7)**: 1290-1295 (2021)
 
 
 * HIAST2   
