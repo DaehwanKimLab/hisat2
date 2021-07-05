@@ -115,13 +115,13 @@ For human genome reference, HISAT-3N requires about 9GB for alignment with stand
 
 #### Examples:
 * Single-end slam-seq reads (T to C conversion, RNA) alignment with standard 3N-index:  
-  `hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C`
+  `hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C --no-repeat-index`
 
 * Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with repeat 3N-index:   
-  `hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T`
+  `hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment`
 
-* Single-end TAPS reads (have C to T conversion， RNA) alignment with repeat 3N-index and only output unique aligned result:   
-  `hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --unique`
+* Single-end TAPS reads (have C to T conversion， RNA) alignment with repeat 3N-index:   
+  `hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --repeat`
 
 
 
@@ -220,9 +220,9 @@ There are 7 columns in the 3N-conversion-table:
 Publication
 ============
 
-* HISAT-3N paper  
-  Zhang, Y., C. Park, C. Bennett, M. Thornton and D. Kim [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
+* HISAT-3N   
+  Zhang, Y., Park, C., Bennett, C., Thornton, M. and Kim, D [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
 
 
-* HIAST2 paper  
+* HIAST2   
   Kim, D., Paggi, J.M., Park, C. _et al._ [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://doi.org/10.1038/s41587-019-0201-4). _Nat Biotechnol_ **37**, 907–915 (2019)  
