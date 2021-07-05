@@ -97,6 +97,6 @@ Publication
   Kim, D., Paggi, J.M., Park, C. et al. [Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype](https://www.nature.com/articles/s41587-019-0201-4). Nat Biotechnol 37, 907–915 (2019)
 
 * ### HISAT-3N
-  Zhang, Y., C. Park, C. Bennett, M. Thornton and D. Kim [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
+  Zhang, Y., Park, C., Bennett, C., Thornton, M. and Kim, D [Rapid and accurate alignment of nucleotide conversion sequencing reads with HISAT-3N](https://doi.org/10.1101/gr.275193.120) Genome Research 31(7): 1290-1295 (2021)
   
 
