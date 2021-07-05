@@ -21,21 +21,21 @@
 #include "utility_3n.h"
 #include "alphabet.h"
 
-bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo) {
+void getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo) {
     if ((usrInputFrom == 'A' && usrInputTo == 'T') ||
         (usrInputFrom == 'A' && usrInputTo == 'C') ||
         (usrInputFrom == 'C' && usrInputTo == 'G') ||
         (usrInputFrom == 'C' && usrInputTo == 'T')) {
         convertFrom = usrInputFrom;
         convertTo = usrInputTo;
-        return false;
+        return;
     }
     if ((usrInputFrom == 'A' && usrInputTo == 'G') ||
         (usrInputFrom == 'G' && usrInputTo == 'T')) {
         swap(usrInputFrom, usrInputTo);
         convertFrom = usrInputFrom;
         convertTo = usrInputTo;
-        return true;
+        return;
     }
     if ((usrInputFrom == 'C' && usrInputTo == 'A') ||
         (usrInputFrom == 'G' && usrInputTo == 'C') ||
@@ -44,13 +44,13 @@ bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& 
         swap(usrInputFrom, usrInputTo);
         convertFrom = usrInputFrom;
         convertTo = usrInputTo;
-        return false;
+        return;
     }
     if ((usrInputFrom == 'G' && usrInputTo == 'A') ||
         (usrInputFrom == 'T' && usrInputTo == 'G')){
         convertFrom = usrInputFrom;
         convertTo = usrInputTo;
-        return true;
+        return;
     }
 }
 

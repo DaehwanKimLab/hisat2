@@ -106,7 +106,7 @@ public:
     char& getLabel() { return label; }
 };
 
-extern bool getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo);
+extern void getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& convertTo);
 extern bool fileExist (string name);
 
 

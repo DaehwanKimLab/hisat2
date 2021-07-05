@@ -1585,12 +1585,12 @@ bool GenomeHit<index_t>::combineWith(
 
     int refConversion_3N[5] = {0, 1, 2, 3, 4};
     if (threeN){
-        if (((rd.threeN_cycle == threeN_CT_FW || rd.threeN_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
-            ((rd.threeN_cycle == threeN_CT_RC || rd.threeN_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
-            // C to T conversion
+        if (((rd.threeN_cycle == threeN_type1conversion_FW || rd.threeN_cycle == threeN_type2conversion_RC) && !rd.oppositeConversion_3N) ||
+            ((rd.threeN_cycle == threeN_type1conversion_RC || rd.threeN_cycle == threeN_type2conversion_FW) && rd.oppositeConversion_3N)) {
+            // type 1 conversion
             refConversion_3N[asc2dna[hs3N_convertedFrom]] = asc2dna[hs3N_convertedTo];
         } else {
-            // G to A conversion
+            // type 2 conversion
             refConversion_3N[asc2dna[hs3N_convertedFromComplement]] = asc2dna[hs3N_convertedToComplement];
         }
     }
@@ -3714,12 +3714,12 @@ bool GenomeHit<index_t>::repOk(const Read& rd, const BitPairReference& ref)
 
     int refConversion_3N[5] = {0, 1, 2, 3, 4};
     if (threeN){
-        if (((rd.threeN_cycle == threeN_CT_FW || rd.threeN_cycle == threeN_GA_RC) && !rd.oppositeConversion_3N) ||
-            ((rd.threeN_cycle == threeN_CT_RC || rd.threeN_cycle == threeN_GA_FW) && rd.oppositeConversion_3N)) {
-            // C to T conversion
+        if (((rd.threeN_cycle == threeN_type1conversion_FW || rd.threeN_cycle == threeN_type2conversion_RC) && !rd.oppositeConversion_3N) ||
+            ((rd.threeN_cycle == threeN_type1conversion_RC || rd.threeN_cycle == threeN_type2conversion_FW) && rd.oppositeConversion_3N)) {
+            // type 1 conversion
             refConversion_3N[asc2dna[hs3N_convertedFrom]] = asc2dna[hs3N_convertedTo];
         } else {
-            //G to A conversion
+            // type 2 conversion
             refConversion_3N[asc2dna[hs3N_convertedFromComplement]] = asc2dna[hs3N_convertedToComplement];
         }
     }

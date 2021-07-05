@@ -308,15 +308,15 @@ static EList<size_t> readLens;
 bool threeN = false; // indicator for 3N mode.
 bool base_change_entered; // set true once user used --base-change
 
-char usrInput_convertedFrom; // user input converted from. the nucleotide is replaced by others in sample preparation protocol.
-char usrInput_convertedTo;   // user input converted To. the nucleotide to others in sample preparation protocol.
-char usrInput_convertedToComplement; // the complement of usrInput_convertedFrom
-char usrInput_convertedFromComplement; // the complement of usrInput_convertedTo
+char usrInput_convertedFrom; // user input converted from. the nucleotide is replaced by others in sample preparation protocol. for sequence comparison step in HISAT-3N.
+char usrInput_convertedTo;   // user input converted To. the nucleotide to others in sample preparation protocol. for sequence comparison step in HISAT-3N.
+char usrInput_convertedFromComplement; // the complement of usrInput_convertedFrom. for sequence comparison step in HISAT-3N.
+char usrInput_convertedToComplement; // the complement of usrInput_convertedTo. for sequence comparison step in HISAT-3N.
 
-char hs3N_convertedFrom; // the actual converted from by HISAT-3N.
-char hs3N_convertedTo;   // the actual converted to by HISAT-3N.
-char hs3N_convertedToComplement; // the complement of hs3N_convertedFrom. use in - strand.
-char hs3N_convertedFromComplement; // the complement of hs3N_convertedTo. use in - strand.
+char hs3N_convertedFrom; // the actual converted from by HISAT-3N. use in + strand.
+char hs3N_convertedTo;   // the actual converted to by HISAT-3N. use in + strand.
+char hs3N_convertedFromComplement; // the complement of hs3N_convertedFrom. use in - strand.
+char hs3N_convertedToComplement; // the complement of hs3N_convertedTo. use in - strand.
 
 string threeN_indexTags[2];
 
@@ -324,7 +324,7 @@ vector<ht2_handle_t> repeatHandles; // the 2 repeat handles helps expand the rep
 struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's index for repeat alignment.
 int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
 bool uniqueOutputOnly; // only output the unique alignment result.
-
+int nMappingCycle; // =1 for standard HISAT2, =4 for HISAT-3N, =4 for (HISAT-3N and hs3N_convertedFrom == hs3N_convertedToComplement)
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -571,6 +571,7 @@ static void resetOptions() {
     base_change_entered = false;
     threeN_indexTags[0] = ".3n.";
     threeN_indexTags[1] = ".3n.";
+    nMappingCycle = 1;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -1844,6 +1845,17 @@ static void parseOption(int next_option, const char *arg) {
             usrInput_convertedFrom = toupper(args[0][0]);
             usrInput_convertedTo = toupper(args[1][0]);
 
+            string s = "ACGT";
+            if ((s.find(usrInput_convertedFrom) == std::string::npos) || (s.find(usrInput_convertedTo) == std::string::npos)) {
+                cerr << "Please enter the nucleotide in 'ACGT' for --base-change option." << endl;
+                throw 1;
+            }
+
+            if (usrInput_convertedFrom == usrInput_convertedTo) {
+                cerr << "Please enter two different base for --base-change option. If you wish to align normal reads without nucleotide conversion, please use hisat2." << endl;
+                throw 1;
+            }
+
             usrInput_convertedFromComplement = asc2dnacomp[usrInput_convertedFrom];
             usrInput_convertedToComplement   = asc2dnacomp[usrInput_convertedTo];
 
@@ -1928,6 +1940,7 @@ static void parseOptions(int argc, const char **argv) {
 	if (showVersion) {
 	    return;
 	}
+
 	// Remove initial semicolons
 	while(!polstr.empty() && polstr[0] == ';') {
 		polstr = polstr.substr(1);
@@ -1945,6 +1958,14 @@ static void parseOptions(int argc, const char **argv) {
         cerr << "Please do not use --base-change for HISAT2. To align nucleotide conversion reads, please use HISAT-3N" << endl;
         printUsage(cerr);
         throw 1;
+	}
+
+	if (threeN) {
+        if (hs3N_convertedFrom == hs3N_convertedToComplement) {
+            nMappingCycle = 2;
+        } else {
+            nMappingCycle = 4;
+        }
 	}
 
     size_t failStreakTmp = 0;
@@ -3359,6 +3380,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                             rp,            // reporting parameters
                                             *bmapq.get(),  // MAPQ calculator
                                             (size_t)tid,   // thread id
+                                            nMappingCycle,
                                             secondary,     // secondary alignments
                                             no_spliced_alignment ? NULL : ssdb,
                                             thread_rids_mindist);
@@ -3522,12 +3544,12 @@ static void multiseedSearchWorker_hisat2(void *vp) {
             bool gNofw3N = false;
             bool gNorc3N = false;
             // for threeN (3N) mode, we need to map the read 4 times. for regular mode, only 1 time.
-			while(retry || (threeN ? (mappingCycle < 4) : (mappingCycle < 1)) ) {
+			while(retry || mappingCycle < nMappingCycle) {
 
                 msinkwrap->resetInit_();
                 if (threeN) {
                     ps->changePlan3N(mappingCycle);
-                    gNorc3N = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_FW);
+                    gNorc3N = (mappingCycle == threeN_type1conversion_FW || mappingCycle == threeN_type2conversion_FW);
                     gNofw3N = !gNorc3N;
                 }
 				retry = false;
@@ -3732,7 +3754,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     bool useRepeat;
 
                     if (threeN) {
-                        threeN_index = (mappingCycle == threeN_CT_FW || mappingCycle == threeN_GA_RC) ? 0 : 1;
+                        threeN_index = (mappingCycle == threeN_type1conversion_FW || mappingCycle == threeN_type2conversion_RC) ? 0 : 1;
                         useRepeat = paired ? (ps->bufa().length() >= 100) && (ps->bufb().length() >= 100) :
                                          ps->bufa().length() >= 80;
                     }

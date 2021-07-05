@@ -422,11 +422,20 @@ static void parseOptions(int argc, const char **argv) {
                          << "arguments to --base-change option, got " << args.size() << endl;
                     throw 1;
                 }
+
                 getConversion(args[0][0], args[1][0], convertedFrom, convertedTo);
-                if (convertedFrom == convertedTo) {
-                    cerr << "Please enter different nucleotide for --base-change option. If there is no nucleotide conversion, please use HISAT2." << endl;
+
+                string s = "ACGT";
+                if ((s.find(convertedFrom) == std::string::npos) || (s.find(convertedTo) == std::string::npos)) {
+                    cerr << "Please enter the nucleotide in 'ACGT' for --base-change option." << endl;
                     throw 1;
                 }
+
+                if (convertedFrom == convertedTo) {
+                    cerr << "Please enter two different base for --base-change option. If you wish to build index without nucleotide conversion, please use hisat2-build." << endl;
+                    throw 1;
+                }
+                
                 convertedFromComplement = asc2dnacomp[convertedFrom];
                 convertedToComplement   = asc2dnacomp[convertedTo];
                 base_change_entered = true;
