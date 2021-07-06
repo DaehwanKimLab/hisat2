@@ -68,9 +68,9 @@ These files constitute the hisat-3n index and no other file is needed to alignme
   2 letters separated by ',' for this argument. The first letter(chr1) should be the converted base, the second letter(chr2) should be
   the converted to base. For example, during slam-seq, some 'T' is converted to 'C',
   please enter `--base-change T,C`. During bisulfite-seq, some 'C' is converted to 'T', please enter `--base-change C,T`. 
-* Different conversion type may build the same hisat-3n index. Please check the table below for more detail. 
+* Different conversion types may build the same hisat-3n index. Please check the table below for more detail. 
   Once you build the hisat-3n index with C to T conversion (for example BS-seq). 
-  You can align T to C conversion reads (for example SLAM-seq reads) with the same index.
+  You can align the T to C conversion reads (for example SLAM-seq reads) with the same index.
 
 
   | Conversion Types                   | HISAT-3N index suffix         |
@@ -81,14 +81,14 @@ These files constitute the hisat-3n index and no other file is needed to alignme
   |C -> G<br>G -> C                    |.3n.CG.\*.ht2 <br>.3n.GC.\*.ht2|
 
 #### Examples:
-    # Build standard HISAT-3N index (with C to T conversion):  
+    # Build the standard HISAT-3N index (with C to T conversion):  
     hisat-3n-build --base-change C,T genome.fa genome
   
-    # Build repeat HISAT-3N index (with T to C conversion, require 256 GB memory for human genome index):  
+    # Build the repeat HISAT-3N index (with T to C conversion, require 256 GB memory for human genome index):  
     hisat-3n-build --base-change T,C --repeat-index genome.fa genome
 
 It is optional to make the graph index and add SNP or spicing site information to the index, to increase the alignment accuracy. 
-The graph index building may require more memory than linear index building.
+The graph index building may require more memory than the linear index building.
 For more detail, please check the [HISAT2 manual].
 
 [HISAT2 manual]:https://daehwankimlab.github.io/hisat2/manual/
@@ -131,13 +131,13 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
   `--un-conc`, and `--al-conc`. We will fix this problem in future version. Please do not use `--unique-only` if you want to use the hisat2 options above.
 
 #### Examples:
-    # Single-end slam-seq reads (T to C conversion, RNA) alignment with standard 3N-index:  
+    # Single-end slam-seq reads (T to C conversion, RNA) alignment with the standard 3N-index:  
       hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C --no-repeat-index
     
-    # Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with repeat 3N-index:   
+    # Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with the repeat 3N-index:   
       hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment
     
-    # Single-end TAPS reads (have C to T conversion， RNA) alignment with repeat 3N-index:   
+    # Single-end TAPS reads (have C to T conversion， RNA) alignment with the repeat 3N-index:   
       hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --repeat
 
 
@@ -196,16 +196,16 @@ Generate 3N-conversion-table with `hisat-3n-table`:
 
 
 #### Examples:
-    # Generate 3N conversion table for bisulfite sequencing data:  
+    # Generate the 3N-conversion-table for bisulfite sequencing data:  
       hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T
     
-    # Generate 3N-conversion-table for TAPS data and only count base in CpG island and uniquely aligned:  
+    # Generate the 3N-conversion-table for TAPS data and only count base in CpG island and uniquely aligned:  
       hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T --CG-only --unique-only
     
-    # Generate 3N conversion table for bisulfite sequencing data from sorted BAM file:  
+    # Generate the 3N-conversion-table for bisulfite sequencing data from sorted BAM file:  
       samtools view -h sorted_alignment_result.bam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T
     
-    # Generate 3N conversion table for bisulfite sequencing data from unsorted BAM file:  
+    # Generate the 3N-conversion-table for bisulfite sequencing data from unsorted BAM file:  
       samtools sort alignment_result.bam -O sam | hisat-3n-table --ref genome.fa --alignments - --output-name output.tsv --base-change C,T
 
 
