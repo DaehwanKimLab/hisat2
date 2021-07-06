@@ -35,7 +35,8 @@
 #include "gfm.h"
 #include "hgfm.h"
 #include "rfm.h"
-#include "alignment_3n.h"
+#include "utility_3n.h"
+
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -89,6 +90,11 @@ static string repeat_haplotype_fname;
 
 bool threeN = false;
 bool repeatIndex = false;
+bool base_change_entered;
+char convertedFrom;
+char convertedTo;
+char convertedFromComplement;
+char convertedToComplement;
 
 ConvertMatrix3N baseChange;
 
@@ -132,6 +138,11 @@ static void resetOptions() {
     repeat_haplotype_fname = "";
     threeN = false;
     repeatIndex = false;
+    base_change_entered = false;
+    convertedFrom = 'C';
+    convertedTo = 'T';
+    convertedFromComplement = asc2dnacomp[convertedFrom];
+    convertedToComplement = asc2dnacomp[convertedTo];
 }
 
 // Argument constants for getopts
@@ -160,7 +171,8 @@ enum {
     ARG_REPEAT_SNP,
     ARG_REPEAT_HAPLOTYPE,
     ARG_3N,
-    ARG_REPEAT_INDEX
+    ARG_REPEAT_INDEX,
+    ARG_BASE_CHANGE
 };
 
 /**
@@ -209,7 +221,7 @@ static void printUsage(ostream& out) {
         << "    --repeat-snp <path>     Repeat snp file name" << endl
         << "    --repeat-haplotype <path>   Repeat haplotype file name" << endl
 	    << "    --seed <int>            seed for random number generator" << endl
-	    << "    --3N                    build 3N index rather than standard hisat2 index" << endl
+	    << "    --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (default:C,T)" << endl
 	    << "    --repeat-index<int>-<int>[,<int>-<int>]  automatically build repeat database and repeat index, enter the minimum-maximum repeat length pairs (default: 100-300)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
@@ -267,8 +279,9 @@ static struct option long_options[] = {
 	{(char*)"reverse-each",   no_argument,       0,            ARG_REVERSE_EACH},
 	{(char*)"usage",          no_argument,       0,            ARG_USAGE},
     {(char*)"wrapper",        required_argument, 0,            ARG_WRAPPER},
-    {(char*)"3N",            no_argument,       0,            ARG_3N},
-    {(char*)"repeat-index",   no_argument, 0,            ARG_REPEAT_INDEX},
+    {(char*)"3N",             no_argument,       0,            ARG_3N},
+    {(char*)"repeat-index",   no_argument,       0,            ARG_REPEAT_INDEX},
+    {(char*)"base-change",    required_argument, 0,            ARG_BASE_CHANGE},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -401,6 +414,32 @@ static void parseOptions(int argc, const char **argv) {
 			case ARG_NTOA: nsToAs = true; break;
             case ARG_3N: threeN = true; break;
             case ARG_REPEAT_INDEX: repeatIndex = true; break;
+            case ARG_BASE_CHANGE: {
+                EList<string> args;
+                tokenize(optarg, ",", args);
+                if(args.size() != 2) {
+                    cerr << "Error: expected 2 comma-separated "
+                         << "arguments to --base-change option, got " << args.size() << endl;
+                    throw 1;
+                }
+
+                getConversion(args[0][0], args[1][0], convertedFrom, convertedTo);
+
+                string s = "ACGT";
+                if ((s.find(convertedFrom) == std::string::npos) || (s.find(convertedTo) == std::string::npos)) {
+                    cerr << "Please enter the nucleotide in 'ACGT' for --base-change option." << endl;
+                    throw 1;
+                }
+
+                if (convertedFrom == convertedTo) {
+                    cerr << "Please enter two different base for --base-change option. If you wish to build index without nucleotide conversion, please use hisat2-build." << endl;
+                    throw 1;
+                }
+                
+                convertedFromComplement = asc2dnacomp[convertedFrom];
+                convertedToComplement   = asc2dnacomp[convertedTo];
+                base_change_entered = true;
+            }
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
 			case 's': sanityCheck = true; break;
@@ -722,6 +761,11 @@ int hisat2_build(int argc, const char **argv) {
 			return 0;
 		}
 
+        if (!threeN && base_change_entered) {
+            cerr << "Please do not use --base-change for hisat2-build. To build hisat-3n index, please use hisat-3n-build." << endl;
+            printUsage(cerr);
+            throw 1;
+        }
 		// Get input filename
 		if(optind >= argc) {
 			cerr << "No input sequence or sequence file specified!" << endl;
@@ -813,12 +857,22 @@ int hisat2_build(int argc, const char **argv) {
                 for (int i = 0; i < nloop; i++) {
                     string tag = "";
                     if (threeN) {
+                        tag += ".3n.";
                         if (i == 0) {
-                            tag = ".3n.1";
-                            baseChange.convert('C', 'T');
+                            tag += convertedFrom;
+                            tag += convertedTo;
+                            baseChange.convert(convertedFrom, convertedTo);
                         } else {
-                            tag = ".3n.2";
-                            baseChange.convert('G', 'A');
+                            tag += convertedFromComplement;
+                            tag += convertedToComplement;
+                            baseChange.convert(convertedFromComplement, convertedToComplement);
+                        }
+
+                        string indexFilename = outfile + tag + ".6.ht2";
+                        if (fileExist(indexFilename)) {
+                            cerr << "*** Find index for " << outfile + tag << "，skip this index building process." << endl;
+                            cerr << "    To re-build your hisat-3n index, please delete the old index manually before running hisat-3n-build." << endl;
+                            continue;
                         }
                     }
 

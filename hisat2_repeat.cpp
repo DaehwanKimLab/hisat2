@@ -40,7 +40,7 @@
 #include "scoring.h"
 #include "mask.h"
 #include "repeat_builder.h"
-#include "alignment_3n.h"
+#include "utility_3n.h"
 
 /**
  * \file Driver for the bowtie-build indexing tool.
@@ -98,6 +98,11 @@ static bool save_sa;
 static bool load_sa;
 
 bool threeN = false;
+char convertedFrom;
+char convertedTo;
+char convertedFromComplement;
+char convertedToComplement;
+bool base_change_entered;
 
 static void resetOptions() {
 	verbose        = true;  // be talkative (default)
@@ -141,6 +146,11 @@ static void resetOptions() {
     load_sa = false;
     wrapper.clear();
     threeN = false;
+    convertedFrom = 'C';
+    convertedTo = 'T';
+    convertedFromComplement = asc2dnacomp[convertedFrom];
+    convertedToComplement = asc2dnacomp[convertedTo];
+    base_change_entered = false;
 }
 
 // Argument constants for getopts
@@ -176,7 +186,8 @@ enum {
     ARG_MAX_SEED_EXTLEN,
     ARG_SAVE_SA,
     ARG_LOAD_SA,
-    ARG_3N
+    ARG_3N,
+    ARG_BASE_CHANGE
 };
 
 /**
@@ -221,6 +232,7 @@ static void printUsage(ostream& out) {
         << "    --save-sa" << endl
         << "    --load-sa" << endl
         << "    --3N                    make 3N repeat database" << endl
+        << "    --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (default:C,T)" << endl
 	    << "    -q/--quiet              disable verbose output (for debugging)" << endl
 	    << "    -h/--help               print detailed description of tool and its options" << endl
 	    << "    --usage                 print this usage message" << endl
@@ -270,6 +282,7 @@ static struct option long_options[] = {
 	{(char*)"save-sa",        no_argument,       0,            ARG_SAVE_SA},
     {(char*)"load-sa",        no_argument,       0,            ARG_LOAD_SA},
     {(char*)"3N",             no_argument,       0,            ARG_3N},
+    {(char*)"base-change",    required_argument, 0,            ARG_BASE_CHANGE},
 	{(char*)0, 0, 0, 0} // terminator
 };
 
@@ -469,6 +482,31 @@ static void parseOptions(int argc, const char **argv) {
             case ARG_3N: {
                 threeN = true;
                 break;
+            }
+            case ARG_BASE_CHANGE: {
+                EList<string> args;
+                tokenize(optarg, ",", args);
+                if(args.size() != 2) {
+                    cerr << "Error: expected 2 comma-separated "
+                         << "arguments to --base-change option, got " << args.size() << endl;
+                    throw 1;
+                }
+                getConversion(args[0][0], args[1][0], convertedFrom, convertedTo);
+
+                string s = "ACGT";
+                if ((s.find(convertedFrom) == std::string::npos) || (s.find(convertedTo) == std::string::npos)) {
+                    cerr << "Please enter the nucleotide in 'ACGT' for --base-change option." << endl;
+                    throw 1;
+                }
+
+                if (convertedFrom == convertedTo) {
+                    cerr << "Please enter two different base for --base-change option. If you wish to build the repeat database without nucleotide conversion, please do not use --base-change and --3N options." << endl;
+                    throw 1;
+                }
+
+                convertedFromComplement = asc2dnacomp[convertedFrom];
+                convertedToComplement   = asc2dnacomp[convertedTo];
+                base_change_entered = true;
             }
 			case 'a': autoMem = false; break;
 			case 'q': verbose = false; break;
@@ -852,6 +890,11 @@ int hisat2_repeat(int argc, const char **argv) {
 			return 0;
 		}
 
+        if (!threeN && base_change_entered) {
+            cerr << "To build hisat-3n repeat database, please add argument --3N. To build the hisat2 repeat database, please remove the argument --base-change." << endl;
+            printUsage(cerr);
+            throw 1;
+        }
 		// Get input filename
 		if(optind >= argc) {
 			cerr << "No input sequence or sequence file specified!" << endl;
@@ -902,12 +945,22 @@ int hisat2_repeat(int argc, const char **argv) {
                 for (int i = 0; i < nloop; i++) {
                     string tag = "";
                     if (threeN) {
+                        tag += ".3n.";
                         if (i == 0) {
-                            tag = ".3n.1";
-                            baseChange.convert('C', 'T');
+                            tag += convertedFrom;
+                            tag += convertedTo;
+                            baseChange.convert(convertedFrom, convertedTo);
                         } else {
-                            tag = ".3n.2";
-                            baseChange.convert('G', 'A');
+                            tag += convertedFromComplement;
+                            tag += convertedToComplement;
+                            baseChange.convert(convertedFromComplement, convertedToComplement);
+                        }
+
+                        string indexFilename = outfile + tag + ".rep.fa";
+                        if (fileExist(indexFilename)) {
+                            cerr << "*** Find repeat database for " << outfile + tag << "，skip this repeat database building process." << endl;
+                            cerr << "    To re-build your hisat-3n repeat database, please delete the old index manually before running hisat2-repeat or hisat-3n-build." << endl;
+                            continue;
                         }
                     }
                     driver<SString<char> >(infile, infiles, outfile + tag, false, forward_only, CGtoTG);

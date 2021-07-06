@@ -1701,12 +1701,15 @@ class AlnSinkWrap3N : public AlnSinkWrap<index_t> {
     using AlnSinkWrap<index_t>::selectByScore;
     using AlnSinkWrap<index_t>::selectAlnsToReport;
 
+    int lastMappingCycle;
+
 public:
     AlnSinkWrap3N(
             AlnSink<index_t>& g,       // AlnSink being wrapped
             const ReportingParams& rp, // Parameters governing reporting
             Mapq& mapq,                // Mapq calculator
             size_t threadId,           // Thread ID
+            int nMappingCycle,         // total mapping cycle
             bool secondary = false,    // Secondary alignments
             const SpliceSiteDB* ssdb = NULL, // splice sites
             uint64_t threads_rids_mindist = 0) :
@@ -1719,7 +1722,7 @@ public:
                     ssdb,
                     threads_rids_mindist)
     {
-
+        lastMappingCycle = nMappingCycle - 1;
     }
 
     void finishRead(
@@ -1881,7 +1884,7 @@ public:
 
                 init_ = false;
                 //g_.outq().finishRead(obuf_, rdid_, threadid_);
-                if (rd1_->threeN_cycle == threeN_GA_RC) {
+                if (rd1_->threeN_cycle == lastMappingCycle) {
                     g_.output(threadid_-1, met, obuf_);
                 }
                 return;
@@ -1965,7 +1968,7 @@ public:
 
                 init_ = false;
                 //g_.outq().finishRead(obuf_, rdid_, threadid_);
-                if (rd1_->threeN_cycle == threeN_GA_RC) {
+                if (rd1_->threeN_cycle == lastMappingCycle) {
                     g_.output(threadid_-1, met, obuf_);
                 }
                 return;
@@ -2248,7 +2251,7 @@ public:
             }
         } // if(suppress alignments)
         init_ = false;
-        if (rd1_->threeN_cycle == threeN_GA_RC) {
+        if (rd1_->threeN_cycle == lastMappingCycle) {
             g_.output(threadid_-1, met, obuf_);
         }
         return;

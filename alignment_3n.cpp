@@ -20,6 +20,7 @@
 #include "alignment_3n.h"
 #include "aln_sink.h"
 
+
 /**
  * return true if two location is concordant.
  * return false, if there are not concordant or too far (>maxPairDistance).
@@ -154,5 +155,4 @@ void Alignments::reportStats_paired(ReportingMetrics& met) {
         else { met.nconcord_uni2++; }
     }
 }
-
 
