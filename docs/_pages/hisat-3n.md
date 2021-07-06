@@ -87,23 +87,23 @@ These files constitute the hisat-3n index and no other file is needed to alignme
     # Build the repeat HISAT-3N index (with T to C conversion, require 256 GB memory for human genome index):  
     hisat-3n-build --base-change T,C --repeat-index genome.fa genome
 
-It is optional to make the graph index and add SNP or spicing site information to the index, to increase the alignment accuracy. 
+It is optional to make the graph index and add SNP or spice site information to the index, to increase the alignment accuracy. 
 The graph index building may require more memory than the linear index building.
 For more detail, please check the [HISAT2 manual].
 
 [HISAT2 manual]:https://daehwankimlab.github.io/hisat2/manual/
 
 #### Examples:
-    # Standard HISAT-3N integrated index with SNP information
-    hisat-3n-build --exons genome.exon genome.fa genome 
+    # Build the standard HISAT-3N index integrated index with SNP information
+    hisat-3n-build --snp genome.snp genome.fa genome 
     
-    # Standard HISAT-3N integrated index with splicing site information
+    # Build the standard HISAT-3N integrated index with splice site information
     hisat-3n-build --ss genome.ss genome.fa genome 
     
-    # Repeat HISAT-3N integrated index with SNP information
-    hisat-3n-build --repeat-index --exons genome.exon genome.fa genome 
+    # Build the repeat HISAT-3N index integrated index with SNP information
+    hisat-3n-build --repeat-index --snp genome.snp genome.fa genome 
     
-    # Repeat HISAT-3N integrated index with splicing site information
+    # Build the repeat HISAT-3N integrated index with splice site information
     hisat-3n-build --repeat-index --ss genome.ss genome.fa genome 
 
 Alignment with `hisat-3n`
