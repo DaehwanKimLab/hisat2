@@ -98,7 +98,7 @@ For more detail, please check the [HISAT2 manual].
     hisat-3n-build --base-change C,T --snp genome.snp genome.fa genome 
     
     # Build the standard HISAT-3N integrated index with splice site information
-    hisat-3n-build --base-change C,T -ss genome.ss --exon genome.exon genome.fa genome 
+    hisat-3n-build --base-change C,T --ss genome.ss --exon genome.exon genome.fa genome 
     
     # Build the repeat HISAT-3N index integrated index with SNP information
     hisat-3n-build --base-change C,T --repeat-index --snp genome.snp genome.fa genome 
