@@ -1856,23 +1856,6 @@ static void parseOption(int next_option, const char *arg) {
                 throw 1;
             }
 
-            usrInput_convertedFromComplement = asc2dnacomp[usrInput_convertedFrom];
-            usrInput_convertedToComplement   = asc2dnacomp[usrInput_convertedTo];
-
-            getConversion(usrInput_convertedFrom, usrInput_convertedTo, hs3N_convertedFrom, hs3N_convertedTo);
-            hs3N_convertedFromComplement = asc2dnacomp[hs3N_convertedFrom];
-            hs3N_convertedToComplement   = asc2dnacomp[hs3N_convertedTo];
-
-            asc2dna_3N[0][hs3N_convertedFrom] = asc2dna[hs3N_convertedTo];
-            asc2dna_3N[0][tolower(hs3N_convertedFrom)] = asc2dna[hs3N_convertedTo];
-            asc2dna_3N[1][hs3N_convertedFromComplement] = asc2dna[hs3N_convertedToComplement];
-            asc2dna_3N[1][tolower(hs3N_convertedFromComplement)] = asc2dna[hs3N_convertedToComplement];
-
-            threeN_indexTags[0] += hs3N_convertedFrom;
-            threeN_indexTags[0] += hs3N_convertedTo;
-            threeN_indexTags[1] += hs3N_convertedFromComplement;
-            threeN_indexTags[1] += hs3N_convertedToComplement;
-
             break;
         }
         case ARG_3N: {
@@ -1961,6 +1944,23 @@ static void parseOptions(int argc, const char **argv) {
 	}
 
 	if (threeN) {
+        usrInput_convertedFromComplement = asc2dnacomp[usrInput_convertedFrom];
+        usrInput_convertedToComplement   = asc2dnacomp[usrInput_convertedTo];
+
+        getConversion(usrInput_convertedFrom, usrInput_convertedTo, hs3N_convertedFrom, hs3N_convertedTo);
+        hs3N_convertedFromComplement = asc2dnacomp[hs3N_convertedFrom];
+        hs3N_convertedToComplement   = asc2dnacomp[hs3N_convertedTo];
+
+        asc2dna_3N[0][hs3N_convertedFrom] = asc2dna[hs3N_convertedTo];
+        asc2dna_3N[0][tolower(hs3N_convertedFrom)] = asc2dna[hs3N_convertedTo];
+        asc2dna_3N[1][hs3N_convertedFromComplement] = asc2dna[hs3N_convertedToComplement];
+        asc2dna_3N[1][tolower(hs3N_convertedFromComplement)] = asc2dna[hs3N_convertedToComplement];
+
+        threeN_indexTags[0] += hs3N_convertedFrom;
+        threeN_indexTags[0] += hs3N_convertedTo;
+        threeN_indexTags[1] += hs3N_convertedFromComplement;
+        threeN_indexTags[1] += hs3N_convertedToComplement;
+
         if (hs3N_convertedFrom == hs3N_convertedToComplement) {
             nMappingCycle = 2;
         } else {
