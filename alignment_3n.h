@@ -412,7 +412,7 @@ public:
                         }
                         newMD_String.append(refChar);
                     }
-                    if (newXM + (conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
+                    if ((conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
                         return false;
                     }
                     readPos++;
@@ -517,7 +517,7 @@ public:
                         }
                         MD.append(refChar);
                     }
-                    if (newXM + (conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
+                    if ((conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
                         return false;
                     }
                     readPos++;
