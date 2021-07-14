@@ -13,14 +13,14 @@ Overview
 -----------------
 **HISAT-3N** (hierarchical indexing for spliced alignment of transcripts - 3 nucleotides)
 is designed for nucleotide conversion sequencing technologies and implemented based on HISAT2.
-There are two strategies for HISAT-3N to align nuleotide conversion sequencing reads: *standard mode* and *repeat mode*.
+There are two strategies for HISAT-3N to align nucleotide conversion sequencing reads: *standard mode* and *repeat mode*.
 The standard mode align reads with standard-3N index only, so it is fast and require small memory (~9GB for human genome alignment).
-The repeat mode align reads with both standard-3N index and repeat-3N index, then output 1,000 alignment result (the output number can be adjust by `--repeat-limit`).
+The repeat mode align reads with both standard-3N index and repeat-3N index, then output 1,000 alignment result (the output number can be adjusted by `--repeat-limit`).
 The repeat mode can align nucleotide conversion reads more accurately,
-and it is only 10% slower than the standard mode with tiny more memory (repeat mode use about ~10.5GB) usage than standard mode.
+and it is only 10% slower than the standard mode with tiny more memory (repeat mode use about ~10.5GB) usage than the standard mode.
 
 HISAT-3N is developed based on [HISAT2], which is particularly optimized for RNA sequencing technology.
-HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [SLAM-seq], [TAB-seq], [oxBS-seq], [TAPS], [scBS-seq], and [scSLAM-seq],.
+HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [SLAM-seq], [TAB-seq], [oxBS-seq], [TAPS], [scBS-seq], and [scSLAM-seq].
 
 [HISAT2]:https://github.com/DaehwanKimLab/hisat2
 [BS-seq]: https://en.wikipedia.org/wiki/Bisulfite_sequencing
@@ -41,7 +41,7 @@ A few notes:
 1. The repeat 3N index building process requires 256 GB of RAM.
 2. The standard 3N index building requires no more than 16 GB of RAM.
 3. The alignment process with either standard or repeat index requires no more than 16 GB of RAM.
-4. [SAMtools] is required to sort SAM file for hisat-3n-table.
+4. [SAMtools] is required to sort SAM file for `hisat-3n-table`.
 
 Install
 ------------
@@ -95,16 +95,16 @@ For more detail, please check the [HISAT2 manual].
 
 #### Examples:
     # Build the standard HISAT-3N index integrated index with SNP information
-    hisat-3n-build --snp genome.snp genome.fa genome 
+    hisat-3n-build --base-change C,T --snp genome.snp genome.fa genome 
     
     # Build the standard HISAT-3N integrated index with splice site information
-    hisat-3n-build --ss genome.ss genome.fa genome 
+    hisat-3n-build --base-change C,T --ss genome.ss --exon genome.exon genome.fa genome 
     
     # Build the repeat HISAT-3N index integrated index with SNP information
-    hisat-3n-build --repeat-index --snp genome.snp genome.fa genome 
+    hisat-3n-build --base-change C,T --repeat-index --snp genome.snp genome.fa genome 
     
     # Build the repeat HISAT-3N integrated index with splice site information
-    hisat-3n-build --repeat-index --ss genome.ss genome.fa genome 
+    hisat-3n-build --base-change C,T --repeat-index --ss genome.ss --exon genome.exon genome.fa genome 
 
 Alignment with `hisat-3n`
 ------------
@@ -122,7 +122,7 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
   For example, you build your index with basename 'genome' by HISAT-3N-build, please enter `--index genome`.
 
 * `--repeat-limit <int>`
-  You can set up the number of alignment will be check for each repeat alignment. You may increase the number to let hisat-3n
+  You can set up the number of alignment will be checked for each repeat alignment. You may increase the number to let hisat-3n
   output more, if a read has multiple mapping. We suggest the repeat limit number for paired-end reads alignment is no more
   than 1,000,000. default: 1000.
 
