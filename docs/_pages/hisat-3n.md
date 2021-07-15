@@ -190,6 +190,18 @@ Generate 3N-conversion-table with `hisat-3n-table`:
 
 * `-p/--threads <int>`  
   Launch `int` parallel threads (default: 1) for table building.
+  
+* `--added-chrname`  
+  Please add this option if you use `--add-chrname` during `hisat-3n` alignment. 
+  During `hisat-3n` alignment, the prefix "chr" is added in front of chromosome name and shows on SAM output, when user choose `--add-chrname`.
+  `hisat-3n-table` cannot find the chromosome name on reference because it has an additional "chr" prefix. This option is to help `hisat-3n-table`
+  find the matching chromosome name on reference file. The 3n-table provides the same chromosome name as SAM file.
+
+* `--removed-chrname`  
+  Please add this option if you use `--remove-chrname` during `hisat-3n` alignment.
+  During `hisat-3n` alignment, the prefix "chr" is removed in front of chromosome name and shows on SAM output, when user choose `--remove-chrname`.
+  `hisat-3n-table` cannot find the chromosome name on reference because it has no "chr" prefix. This option is to help `hisat-3n-table`
+  find the matching chromosome name on reference file. The 3n-table provides the same chromosome name as SAM file.
 
 * `-h/--help`  
   Print usage information and quit.
