@@ -164,10 +164,14 @@ public:
     vector<mutex*> workerLock; // one lock for one worker thread.
     int nThreads = 1;
     ChromosomeFilePositions chromosomePos; // store the chromosome name and it's streamPos. To quickly find new chromosome in file.
+    bool addedChrName = false;
+    bool removedChrName = false;
 
-    Positions(string inputRefFileName, int inputNThreads) {
+    Positions(string inputRefFileName, int inputNThreads, bool inputAddedChrName, bool inputRemovedChrName) {
         working = true;
         nThreads = inputNThreads;
+        addedChrName = inputAddedChrName;
+        removedChrName = inputRemovedChrName;
         for (int i = 0; i < nThreads; i++) {
             workerLock.push_back(new mutex);
         }
@@ -198,7 +202,18 @@ public:
      */
     string getChrName(string& inputLine) {
         size_t endPosition = inputLine.find(' ', 0);
-        return inputLine.substr(1, endPosition-1);
+        string name = inputLine.substr(1, endPosition-1);
+
+        if(removedChrName) {
+            if(name.find("chr") == 0) {
+                name = name.substr(3);
+            }
+        } else if(addedChrName) {
+            if(name.find("chr") != 0) {
+                name = string("chr") + name;
+            }
+        }
+        return name;
     }
 
     /**
@@ -348,6 +363,9 @@ public:
                 }
             }
         }
+        // cannot find the chromosome! throw!
+        cerr << "Cannot find the chromosome: " << targetChromosome << " in reference file." << endl;
+        throw 1;
     }
 
     /**

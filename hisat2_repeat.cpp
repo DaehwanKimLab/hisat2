@@ -504,8 +504,6 @@ static void parseOptions(int argc, const char **argv) {
                     throw 1;
                 }
 
-                convertedFromComplement = asc2dnacomp[convertedFrom];
-                convertedToComplement   = asc2dnacomp[convertedTo];
                 base_change_entered = true;
             }
 			case 'a': autoMem = false; break;
@@ -894,6 +892,10 @@ int hisat2_repeat(int argc, const char **argv) {
             cerr << "To build hisat-3n repeat database, please add argument --3N. To build the hisat2 repeat database, please remove the argument --base-change." << endl;
             printUsage(cerr);
             throw 1;
+        }
+        if (threeN) {
+            convertedFromComplement = asc2dnacomp[convertedFrom];
+            convertedToComplement   = asc2dnacomp[convertedTo];
         }
 		// Get input filename
 		if(optind >= argc) {

@@ -435,9 +435,7 @@ static void parseOptions(int argc, const char **argv) {
                     cerr << "Please enter two different base for --base-change option. If you wish to build index without nucleotide conversion, please use hisat2-build." << endl;
                     throw 1;
                 }
-                
-                convertedFromComplement = asc2dnacomp[convertedFrom];
-                convertedToComplement   = asc2dnacomp[convertedTo];
+
                 base_change_entered = true;
             }
 			case 'a': autoMem = false; break;
@@ -765,6 +763,10 @@ int hisat2_build(int argc, const char **argv) {
             cerr << "Please do not use --base-change for hisat2-build. To build hisat-3n index, please use hisat-3n-build." << endl;
             printUsage(cerr);
             throw 1;
+        }
+        if (threeN) {
+            convertedFromComplement = asc2dnacomp[convertedFrom];
+            convertedToComplement   = asc2dnacomp[convertedTo];
         }
 		// Get input filename
 		if(optind >= argc) {

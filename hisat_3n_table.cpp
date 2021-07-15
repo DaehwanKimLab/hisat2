@@ -37,6 +37,8 @@ char convertFrom = '0';
 char convertTo = '0';
 char convertFromComplement;
 char convertToComplement;
+bool addedChrName = false;
+bool removedChrName = false;
 
 
 Positions* positions;
@@ -45,6 +47,11 @@ bool fileExist (string& filename) {
     ifstream file(filename);
     return file.good();
 }
+
+enum {
+    ARG_ADDED_CHRNAME = 256,
+    ARG_REMOVED_CHRNAME
+};
 
 static const char *short_options = "s:r:t:b:umcp:h";
 static struct option long_options[] {
@@ -56,6 +63,8 @@ static struct option long_options[] {
                 {"multiple-only", no_argument, 0, 'm'},
                 {"CG-only", no_argument, 0, 'c'},
                 {"threads", required_argument, 0, 'p'},
+                {"added-chrname", no_argument, 0, ARG_ADDED_CHRNAME },
+                {"removed-chrname", no_argument, 0, ARG_REMOVED_CHRNAME },
                 {"help", no_argument, 0, 'h'},
                 {0, 0, 0, 0}
         };
@@ -73,6 +82,8 @@ static void printHelp(ostream& out) {
         << "  -u/--unique-only          only count the base which is in unique mapped reads." << endl
         << "  -m/--multiple-only        only count the base which is in multiple mapped reads." << endl
         << "  -c/--CG-only              only count CG and ignore CH in reference." << endl
+        << "  --added-chrname           please add this option if you use --add-chrname during HISAT-3N alignment." << endl
+        << "  --removed-chrname         please add this option if you use --remove-chrname during HISAT-3N alignment." << endl
         << "  -p/--threads <int>        number of threads to launch (1)." << endl
         << "  -h/--help                 print this usage message." << endl;
 }
@@ -136,6 +147,14 @@ static void parseOption(int next_option, const char *optarg) {
             }
             break;
         }
+        case ARG_ADDED_CHRNAME: {
+            addedChrName = true;
+            break;
+        }
+        case ARG_REMOVED_CHRNAME: {
+            removedChrName = true;
+            break;
+        }
         default:
             printHelp(cerr);
             throw 1;
@@ -174,6 +193,12 @@ static void parseOptions(int argc, const char **argv) {
         cerr << "the --base-change argument is required." << endl;
         throw 1;
     }
+
+    if(removedChrName && addedChrName) {
+        cerr << "Error: --removed-chrname and --added-chrname cannot be used at the same time" << endl;
+        throw 1;
+    }
+
     // set complements
     convertFromComplement = asc2dnacomp[convertFrom];
     convertToComplement = asc2dnacomp[convertTo];
@@ -218,7 +243,7 @@ bool getSAMChromosomePos(string* line, string& chr, long long int& pos) {
 
 int hisat_3n_table()
 {
-    positions = new Positions(refFileName, nThreads);
+    positions = new Positions(refFileName, nThreads, addedChrName, removedChrName);
 
     // open #nThreads workers
     vector<thread*> workers;
