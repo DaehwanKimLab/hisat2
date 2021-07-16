@@ -153,10 +153,16 @@ void MappingPositions::outputPair(BTString& o) {
             positions[i].alignments[1]->updateNH(nBestPair);
 
             // get concordant information and change the concordant flag.
-            bool concordant = Alignment::isConcordant(*positions[i].locations[0],
-                                           positions[i].alignments[0]->forward,
-                                           *positions[i].locations[1],
-                                           positions[i].alignments[1]->forward);
+            bool concordant;
+            if (!positions[i].alignments[0]->mapped || !positions[i].alignments[1]->mapped) {
+                concordant = false;
+            } else {
+                concordant = Alignment::isConcordant(*positions[i].locations[0],
+                                                    positions[i].alignments[0]->forward,
+                                                    *positions[i].locations[1],
+                                                    positions[i].alignments[1]->forward);
+            }
+
             positions[i].alignments[0]->setConcordant(concordant);
             positions[i].alignments[1]->setConcordant(concordant);
 
@@ -182,7 +188,7 @@ void MappingPositions::outputPair(BTString& o) {
                 }
                 // change YS tag.
                 positions[i].alignments[0]->setYS(positions[i].repeats[1]);
-                positions[i].alignments[0]->setYS(positions[i].repeats[0]);
+                positions[i].alignments[1]->setYS(positions[i].repeats[0]);
                 //output
                 positions[i].alignments[0]->outputAlignment(o, positions[i].repeats[0], positions[i].locations[1], primary);
                 positions[i].alignments[1]->outputAlignment(o, positions[i].repeats[1], positions[i].locations[0], primary);
