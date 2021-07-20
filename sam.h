@@ -340,7 +340,18 @@ public:
 		const PerReadMetrics& prm, // per-read metrics
 		const Scoring& sc)         // scoring scheme
 		const;
-	
+
+    void printEmptyOptFlags(
+            Alignment* newAlignment,     // output buffer
+            bool first,                // first opt flag printed is first overall?
+            const Read& rd,            // the read
+            const AlnFlags& flags,     // alignment flags
+            const AlnSetSumm& summ,    // summary of alignments for this read
+            const SeedAlSumm& ssm,     // seed alignment summary
+            const PerReadMetrics& prm, // per-read metrics
+            const Scoring& sc)         // scoring scheme
+    const;
+
 	/**
 	 * Return true iff we should try to obey the SAM spec's recommendations
 	 * that:
@@ -1576,8 +1587,8 @@ const
 
     if(print_xr_) {
         // Original read string
-        o.append("\n");
-        printOptFieldNewlineEscapedZ(o, rd.readOrigBuf);
+        newAlignment->passThroughLine.append("\n");
+        printOptFieldNewlineEscapedZ(newAlignment->passThroughLine, rd.readOrigBuf);
     }
 }
 
@@ -1786,6 +1797,216 @@ const
         // Original read string
         o.append("\n");
         printOptFieldNewlineEscapedZ(o, rd.readOrigBuf);
+    }
+}
+
+/**
+ * Print the optional flags to the given string. This function is for HISAT-3N.
+ */
+
+template<typename index_t>
+void SamConfig<index_t>::printEmptyOptFlags(
+        Alignment* newAlignment,     // output buffer
+        bool first,                // first opt flag printed is first overall?
+        const Read& rd,            // read
+        const AlnFlags& flags,     // alignment flags
+        const AlnSetSumm& summ,    // summary of alignments for this read
+        const SeedAlSumm& ssm,     // seed alignment summary
+        const PerReadMetrics& prm, // per-read metrics
+        const Scoring& sc)         // scoring scheme
+const
+{
+    char buf[1024];
+    BTString &o = newAlignment->unChangedTags;
+    if(print_yn_) {
+        // YN:i: Minimum valid score for this mate
+        TAlScore mn = sc.scoreMin.f<TAlScore>(rd.length());
+        itoa10<TAlScore>(mn, buf);
+        WRITE_SEP();
+        o.append("YN:i:");
+        o.append(buf);
+        // Yn:i: Perfect score for this mate
+        TAlScore pe = sc.perfectScore(rd.length());
+        itoa10<TAlScore>(pe, buf);
+        WRITE_SEP();
+        o.append("Yn:i:");
+        o.append(buf);
+    }
+    if(print_zs_) {
+        // ZS:i: Pseudo-random seed for read
+        itoa10<uint32_t>(rd.seed, buf);
+        WRITE_SEP();
+        o.append("ZS:i:");
+        o.append(buf);
+    }
+    if(print_yt_&& !threeN) {
+        // YT:Z: String representing alignment type
+        WRITE_SEP();
+        flags.printYT(o);
+    }
+    if(print_yp_ && flags.partOfPair() && flags.canMax()) {
+        // YP:i: Read was repetitive when aligned paired?
+        WRITE_SEP();
+        flags.printYP(o);
+    }
+    if(print_ym_ && flags.canMax() && (flags.isMixedMode() || !flags.partOfPair())) {
+        // YM:i: Read was repetitive when aligned unpaired?
+        WRITE_SEP();
+        flags.printYM(o);
+    }
+    if(print_yf_ && flags.filtered()) {
+        // YM:i: Read was repetitive when aligned unpaired?
+        first = flags.printYF(o, first) && first;
+    }
+    if(!rgs_.empty()) {
+        WRITE_SEP();
+        o.append(rgs_.c_str());
+    }
+    if(print_xt_) {
+        // XT:i: Timing
+        WRITE_SEP();
+        struct timeval  tv_end;
+        struct timezone tz_end;
+        gettimeofday(&tv_end, &tz_end);
+        size_t total_usecs =
+                (tv_end.tv_sec  - prm.tv_beg.tv_sec) * 1000000 +
+                (tv_end.tv_usec - prm.tv_beg.tv_usec);
+        itoa10<size_t>(total_usecs, buf);
+        o.append("XT:i:");
+        o.append(buf);
+    }
+    if(print_xd_) {
+        // XD:i: Extend DPs
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nExDps, buf);
+        o.append("XD:i:");
+        o.append(buf);
+        // Xd:i: Mate DPs
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nMateDps, buf);
+        o.append("Xd:i:");
+        o.append(buf);
+    }
+    if(print_xu_) {
+        // XU:i: Extend ungapped tries
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nExUgs, buf);
+        o.append("XU:i:");
+        o.append(buf);
+        // Xu:i: Mate ungapped tries
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nMateUgs, buf);
+        o.append("Xu:i:");
+        o.append(buf);
+    }
+    if(print_ye_) {
+        // YE:i: Streak of failed DPs at end
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nDpFail, buf);
+        o.append("YE:i:");
+        o.append(buf);
+        // Ye:i: Streak of failed ungaps at end
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nUgFail, buf);
+        o.append("Ye:i:");
+        o.append(buf);
+    }
+    if(print_yl_) {
+        // YL:i: Longest streak of failed DPs
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nDpFailStreak, buf);
+        o.append("YL:i:");
+        o.append(buf);
+        // Yl:i: Longest streak of failed ungaps
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nUgFailStreak, buf);
+        o.append("Yl:i:");
+        o.append(buf);
+    }
+    if(print_yu_) {
+        // YU:i: Index of last succesful DP
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nDpLastSucc, buf);
+        o.append("YU:i:");
+        o.append(buf);
+        // Yu:i: Index of last succesful DP
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nUgLastSucc, buf);
+        o.append("Yu:i:");
+        o.append(buf);
+    }
+    if(print_xp_) {
+        // XP:Z: String describing seed hits
+        WRITE_SEP();
+        o.append("XP:B:I,");
+        itoa10<uint64_t>(prm.nSeedElts, buf);
+        o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.nSeedEltsFw, buf);
+        o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.nSeedEltsRc, buf);
+        o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.seedMean, buf);
+        o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.seedMedian, buf);
+        o.append(buf);
+    }
+    if(print_yr_) {
+        // YR:i: Redundant seed hits
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nRedundants, buf);
+        o.append("YR:i:");
+        o.append(buf);
+    }
+    if(print_zb_) {
+        // ZB:i: Ftab ops for seed alignment
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nFtabs, buf);
+        o.append("ZB:i:");
+        o.append(buf);
+    }
+    if(print_zr_) {
+        // ZR:Z: Redundant path skips in seed alignment
+        WRITE_SEP();
+        o.append("ZR:Z:");
+        itoa10<uint64_t>(prm.nRedSkip, buf); o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.nRedFail, buf); o.append(buf);
+        o.append(',');
+        itoa10<uint64_t>(prm.nRedIns, buf); o.append(buf);
+    }
+    if(print_zf_) {
+        // ZF:i: FM Index ops for seed alignment
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nSdFmops, buf);
+        o.append("ZF:i:");
+        o.append(buf);
+        // Zf:i: FM Index ops for offset resolution
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nExFmops, buf);
+        o.append("Zf:i:");
+        o.append(buf);
+    }
+    if(print_zm_) {
+        // ZM:Z: Print FM index op string for best-first search
+        WRITE_SEP();
+        o.append("ZM:Z:");
+        prm.fmString.print(o, buf);
+    }
+    if(print_zi_) {
+        // ZI:i: Seed extend loop iterations
+        WRITE_SEP();
+        itoa10<uint64_t>(prm.nExIters, buf);
+        o.append("ZI:i:");
+        o.append(buf);
+    }
+    if(print_xr_) {
+        // Original read string
+        newAlignment->passThroughLine.append("\n");
+        printOptFieldNewlineEscapedZ(newAlignment->passThroughLine, rd.readOrigBuf);
     }
 }
 
