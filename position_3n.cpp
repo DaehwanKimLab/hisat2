@@ -158,13 +158,16 @@ void MappingPositions::outputPair(BTString& o) {
                 concordant = false;
             } else {
                 concordant = Alignment::isConcordant(*positions[i].locations[0],
-                                                    positions[i].alignments[0]->forward,
-                                                    *positions[i].locations[1],
-                                                    positions[i].alignments[1]->forward);
+                                                     positions[i].alignments[0]->forward,
+                                                     *positions[i].locations[1],
+                                                     positions[i].alignments[1]->forward);
             }
 
             positions[i].alignments[0]->setConcordant(concordant);
             positions[i].alignments[1]->setConcordant(concordant);
+
+            positions[i].alignments[0]->setMateMappingFlag(positions[i].alignments[1]->mapped ? positions[i].locations[1] : NULL);
+            positions[i].alignments[1]->setMateMappingFlag(positions[i].alignments[0]->mapped ? positions[i].locations[0] : NULL);
 
             if (!positions[i].repeat) {
                 // output regular alignment result

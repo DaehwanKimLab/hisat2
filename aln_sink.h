@@ -2336,36 +2336,6 @@ public:
 		}
 	}
 
-    /**
-	 * Append a single alignment result, this function is for HSIAT-3N.
-	 */
-    /*virtual void append(
-            ReportingMetrics&     met,
-            BTString&             o,
-            StackedAln&           staln,
-            size_t                threadId,
-            const Read           *rd1,
-            const Read           *rd2,
-            const TReadId         rdid,
-            AlnRes               *rs1,
-            AlnRes               *rs2,
-            const AlnSetSumm&     summ,
-            const SeedAlSumm&     ssm1,
-            const SeedAlSumm&     ssm2,
-            const AlnFlags*       flags1,
-            const AlnFlags*       flags2,
-            const PerReadMetrics& prm,
-            const Mapq&           mapq,
-            const Scoring&        sc,
-            bool                  report2){
-
-	}*/
-
-    // for hisat-3n
-    /*virtual void output(int threadId0, ReportingMetrics& met, BTString& o) {
-
-    }*/
-
 
 protected:
 
@@ -2750,7 +2720,7 @@ public:
                     this->altdb_);
         } else {
             samc_.printEmptyOptFlags(
-                    newAlignment->unChangedTags,
+                    newAlignment,
                     true,        // first opt flag printed is first overall?
                     rd,          // read
                     flags,       // alignment flags
@@ -2759,9 +2729,7 @@ public:
                     prm,         // per-read metrics
                     sc);         // scoring scheme
         }
-
         alignmentsEachThreads[threadId0]->append(newAlignment);
-
     }
 };
 

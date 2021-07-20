@@ -91,6 +91,7 @@ public:
               // - for REF-RC strand (conversionCount[1] is smaller)
     // unChanged tags
     BTString unChangedTags;
+    BTString passThroughLine; // this is controlled by print_xr_ in SamConfig
 
     // for pairScore calculation
     static const int maxPairDistance = 500000;
@@ -165,6 +166,7 @@ public:
         repeatPositions.initialize();
         conversionCount[0] = 0;
         conversionCount[1] = 0;
+        passThroughLine.clear();
     }
 
     Alignment() {
@@ -619,7 +621,15 @@ public:
             o.append("Yf:i:");
             itoa10<int>(Yf, buf);
             o.append(buf);
+
+
         }
+        // unchanged Tags
+        if (!unChangedTags.empty()) {
+            o.append('\t');
+            o.append(unChangedTags.toZBuf());
+        }
+        o.append(passThroughLine.toZBuf());
     }
 
     /**
@@ -668,9 +678,6 @@ public:
         o.append("YT:Z:");
         o.append(YT.toZBuf());
         o.append('\t');
-        // unchanged Tags
-        o.append(unChangedTags.toZBuf());
-        o.append('\t');
         // YS
         if (paired && mateMapped) {
             o.append("YS:i:");
@@ -686,6 +693,12 @@ public:
         o.append("Yf:i:");
         itoa10<int>(repeatInfo->Yf, buf);
         o.append(buf);
+        // unchanged Tags
+        if (!unChangedTags.empty()) {
+            o.append('\t');
+            o.append(unChangedTags.toZBuf());
+        }
+        o.append(passThroughLine.toZBuf());
     }
 
     /**
@@ -707,7 +720,7 @@ public:
             outputLocation = &repeatInfo->repeatLocation;
         }
 
-        setMateMappingFlag(oppoLocation);
+        //setMateMappingFlag(oppoLocation);
         setYT();
 
         char buf[1024];
@@ -823,6 +836,8 @@ public:
     bool DNA;
     int nRepeatAlignment; // count number of repeat alignment we received, for short sequence we could receive a lot of repeat alignment result.
 
+    BTString passThroughLines[2];
+
     void initialize() {
         alignmentPositions.initialize();
         paired = false;
@@ -833,6 +848,7 @@ public:
             readName[i].clear();
             readSequence[i].clear();
             qualityScore[i].clear();
+            passThroughLines[i].clear();
         }
         for (int i = 0; i < alignments.size(); i++) {
             alignments[i]->initialize();
@@ -907,6 +923,9 @@ public:
         newAlignment->extractFlagInfo();
         paired = newAlignment->paired;
         newAlignment->DNA = DNA;
+        if (passThroughLines[newAlignment->pairSegment].empty()) {
+            passThroughLines[newAlignment->pairSegment] = newAlignment->passThroughLine;
+        }
 
         // check if the alignment is already exist. if exist, ignore it.
         if (!alignmentPositions.append(newAlignment)) {
@@ -969,7 +988,9 @@ public:
                 o.append(readSequence[i].toZBuf());
                 o.append("\t");
                 o.append(qualityScore[i].toZBuf());
-                o.append("\tYT:Z:UP\n");
+                o.append("\tYT:Z:UP");
+                o.append(passThroughLines[i].toZBuf());
+                o.append('\n');
             }
         } else {
             assert(!readName[0].empty());
@@ -978,7 +999,9 @@ public:
             o.append(readSequence[0].toZBuf());
             o.append("\t");
             o.append(qualityScore[0].toZBuf());
-            o.append("\tYT:Z:UU\n");
+            o.append("\tYT:Z:UU");
+            o.append(passThroughLines[0].toZBuf());
+            o.append('\n');
         }
     }
 
