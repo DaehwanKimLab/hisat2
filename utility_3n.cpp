@@ -25,14 +25,9 @@ void getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& 
     if ((usrInputFrom == 'A' && usrInputTo == 'T') ||
         (usrInputFrom == 'A' && usrInputTo == 'C') ||
         (usrInputFrom == 'C' && usrInputTo == 'G') ||
-        (usrInputFrom == 'C' && usrInputTo == 'T')) {
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return;
-    }
-    if ((usrInputFrom == 'A' && usrInputTo == 'G') ||
-        (usrInputFrom == 'G' && usrInputTo == 'T')) {
-        swap(usrInputFrom, usrInputTo);
+        (usrInputFrom == 'C' && usrInputTo == 'T') ||
+        (usrInputFrom == 'G' && usrInputTo == 'A') ||
+        (usrInputFrom == 'T' && usrInputTo == 'G')) {
         convertFrom = usrInputFrom;
         convertTo = usrInputTo;
         return;
@@ -40,18 +35,15 @@ void getConversion(char usrInputFrom, char usrInputTo, char& convertFrom, char& 
     if ((usrInputFrom == 'C' && usrInputTo == 'A') ||
         (usrInputFrom == 'G' && usrInputTo == 'C') ||
         (usrInputFrom == 'T' && usrInputTo == 'A') ||
-        (usrInputFrom == 'T' && usrInputTo == 'C')) {
-        swap(usrInputFrom, usrInputTo);
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
+        (usrInputFrom == 'T' && usrInputTo == 'C') ||
+        (usrInputFrom == 'A' && usrInputTo == 'G') ||
+        (usrInputFrom == 'G' && usrInputTo == 'T')) {
+        convertFrom = usrInputTo;
+        convertTo = usrInputFrom;
         return;
     }
-    if ((usrInputFrom == 'G' && usrInputTo == 'A') ||
-        (usrInputFrom == 'T' && usrInputTo == 'G')){
-        convertFrom = usrInputFrom;
-        convertTo = usrInputTo;
-        return;
-    }
+    cerr << "Un-identified --base-change type: " << usrInputFrom << "," << usrInputTo << endl;
+    throw 1;
 }
 
 bool fileExist (string name) {
