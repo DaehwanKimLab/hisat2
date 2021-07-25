@@ -363,9 +363,11 @@ public:
                 }
             }
         }
-        // cannot find the chromosome! throw!
-        cerr << "Cannot find the chromosome: " << targetChromosome << " in reference file." << endl;
-        throw 1;
+        if (chromosome != targetChromosome) {
+            // cannot find the chromosome! throw!
+            cerr << "Cannot find the chromosome: " << targetChromosome << " in reference file." << endl;
+            throw 1;
+        }
     }
 
     /**
