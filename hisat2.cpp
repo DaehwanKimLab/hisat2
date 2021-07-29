@@ -4815,10 +4815,10 @@ int hisat2(int argc, const char **argv) {
             }
             if (threeN) {
                 bt2indexs[1] = bt2indexs[0];
-                if (fileExist(bt2indexs[0] + threeN_indexTags[0] + ".1.ht2")) {
+                if (fileExist(bt2indexs[0] + threeN_indexTags[0] + ".1." + gfm_ext)) {
                     bt2indexs[0] += threeN_indexTags[0];
                     bt2indexs[1] += threeN_indexTags[1];
-                } else if (fileExist(bt2indexs[0] + ".3n.1.1.ht2")) {
+                } else if (fileExist(bt2indexs[0] + ".3n.1.1." + gfm_ext)) {
                     bt2indexs[0] += ".3n.1";
                     bt2indexs[1] += ".3n.2";
                     if (!((usrInput_convertedFrom == 'C' && usrInput_convertedTo == 'T') ||

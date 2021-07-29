@@ -60,6 +60,37 @@ my $seq_in_args = 0;
 my $skip_read_stat = 0;
 my %signo       = ();
 my @signame     = ();
+my $basechange_pair = 'CT';
+
+# HISAT-3N basechange type
+my %conversion_type = (
+		"AT" => 0, "AC" => 0, "CG" => 0, "CT" => 0, "GA" => 0, "TG" => 0,
+		# need to reverse From,To bases
+		"CA" => 1, "GC" => 1, "TA" => 1, "TC" => 1, "AG" => 1, "GT" => 1,
+		);
+
+my %convertion_rc = (
+		"AT" => "TA", "AC" => "TG", "CG" => "GC",
+		"CT" => "GA", "GA" => "CT", "TG" => "AC",
+		);
+
+sub getConversion {
+	my $from         = uc $_[0];
+	my $to           = uc $_[1];
+	my $conv_pair    = $from.$to;
+
+	my $val = $conversion_type{$conv_pair};
+
+	if (defined $val) {
+		if ($val) {
+			$conv_pair = $to.$from;
+		}
+	} else {
+		return undef;
+	}
+	
+	return $conv_pair;
+}
 
 {
 	# Get signal info
@@ -192,6 +223,22 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 	}
 	if($arg eq "-c") {
 		$seq_in_args = 1;
+	}
+	if($arg eq "--base-change") {
+		my $base_args = "";
+		if (scalar @args > 1 && $args[1] ne "") {
+			$base_args = $args[1];
+		} else {
+			Fail("${arg} option takes an argument.\n") if ($i >= scalar(@ht2_args)-1);
+			$base_args = $ht2_args[$i+1];
+			$i++;
+		}
+		my @basechange_opt = split(/,/, $base_args);
+
+		Fail("Invalid --base-change option\n") if (scalar @basechange_opt != 2);
+		$basechange_pair = getConversion($basechange_opt[0], $basechange_opt[1]);
+
+		Fail("Invalid --base-change option\n") unless defined $basechange_pair;
 	}
 
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
@@ -502,30 +549,83 @@ if(defined($ref_str)) {
 Info("After arg handling:\n");
 Info("  Binary args:\n[ @ht2_args ]\n");
 
+sub find_hisat3n_index {
+	my $isLargeIndex = $_[0];
+	my $IndexName = $_[1];
+
+	my $basepair = $basechange_pair;
+	my $rc_basepair = $convertion_rc{$basechange_pair};
+
+	my @IndexNames = (
+			$IndexName.".3n.$basepair.1",
+			$IndexName.".3n.$rc_basepair.1"
+			);
+
+	my @IndexFullName = ();
+	if ($isLargeIndex) {
+		for (@IndexNames) {
+			push @IndexFullName, $_.".$idx_ext_l";
+		}
+	} else {
+		for (@IndexNames) {
+			push @IndexFullName, $_.".$idx_ext_s";
+		}
+	}
+
+	if (-f $IndexFullName[0] && -f $IndexFullName[1]) {
+		return @IndexFullName; 
+	}
+	
+	# find old-name-format index file 
+	@IndexNames = (
+			$IndexName.".3n.1.1",
+			$IndexName.".3n.2.1"
+			);
+	@IndexFullName = ();
+	if ($isLargeIndex) {
+		for (@IndexNames) {
+			push @IndexFullName, $_.".$idx_ext_l";
+		}
+	} else {
+		for (@IndexNames) {
+			push @IndexFullName, $_.".$idx_ext_s";
+		}
+	}
+
+	if (-f $IndexFullName[0] && -f $IndexFullName[1]) {
+		return @IndexFullName; 
+	}
+
+	# empty array
+	return ();
+}
+
 my $index_name = Extract_IndexName_From(@ht2_args);
+my $def_index_filename_s = $index_name.".3n.$basechange_pair.1.$idx_ext_s";
+my $def_index_filename_l = $index_name.".3n.$basechange_pair.1.$idx_ext_l";
 
 if ($large_idx) {
     Info("Using a large index enforced by user.\n");
     $align_prog  = $align_prog_l;
     $idx_ext     = $idx_ext_l;
-	my $index_filename_l = Get_IndexFileName($large_idx, $index_name);
-    if (not -f $index_filename_l) {
-        Fail("Cannot find the large index ${index_filename_l}\n");
+	my @IndexNames = find_hisat3n_index($large_idx, $index_name);
+    if (scalar @IndexNames == 0) {
+        Fail("Cannot find the large index $def_index_filename_l\n");
     }
-    Info("Using large index (${index_filename_l}).\n");
+    Info("Using large index ($IndexNames[0]).\n");
 }
 else {
-	my $index_filename_l = Get_IndexFileName(1, $index_name);
-	my $index_filename_s = Get_IndexFileName(0, $index_name);
-    if ((-f $index_filename_l) &&
-        (not -f $index_filename_s)) {
+	my @LargeIndexNames = find_hisat3n_index(1, $index_name);
+	my @SmallIndexNames = find_hisat3n_index(0, $index_name);
+
+    if ((scalar @LargeIndexNames > 0) && (scalar @SmallIndexNames == 0)) {
         Info("Cannot find a small index but a large one seems to be present.\n");
-        Info("Switching to using the large index (${index_filename_l}).\n");
+        Info("Switching to using the large index ($LargeIndexNames[0]).\n");
         $align_prog  = $align_prog_l;
         $idx_ext     = $idx_ext_l;
     }
     else {
-        Info("Using the small index (${index_filename_s}).\n")
+        Info("Using the small index (${def_index_filename_s}).\n")
     }
 }
 
