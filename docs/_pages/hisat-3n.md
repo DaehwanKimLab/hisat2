@@ -117,9 +117,9 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
   the converted to base. For example, during slam-seq, some 'T' is converted to 'C',
   please enter `--base-change T,C`. During bisulfite-seq, some 'C' is converted to 'T', please enter `--base-change C,T`.
 
-* `--index/-x <hisat-3n-idx>`  
+* `-x <hisat-3n-idx>`  
   The index for HISAT-3N.  The basename is the name of the index files up to but not including the suffix `.3n.*.*.ht2` / etc.
-  For example, you build your index with basename 'genome' by HISAT-3N-build, please enter `--index genome`.
+  For example, you build your index with basename 'genome' by HISAT-3N-build, please enter `-x genome`.
 
 * `--repeat-limit <int>`
   You can set up the number of alignment will be checked for each repeat alignment. You may increase the number to let hisat-3n
@@ -132,13 +132,13 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
 
 #### Examples:
     # Single-end slam-seq reads (T to C conversion, RNA) alignment with the standard 3N-index:  
-      hisat-3n --index genome -f -U read.fa -S alignment_result.sam --base-change T,C --no-repeat-index
+      hisat-3n -x genome -f -U read.fa -S alignment_result.sam --base-change T,C --no-repeat-index
     
     # Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with the repeat 3N-index:   
-      hisat-3n --index genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment
+      hisat-3n -x genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment
     
     # Single-end TAPS reads (have C to T conversion， RNA) alignment with the repeat 3N-index:   
-      hisat-3n --index genome -q -U read.fq -S alignment_result.sam --base-change C,T --repeat
+      hisat-3n -x genome -q -U read.fq -S alignment_result.sam --base-change C,T --repeat
 
 
 
