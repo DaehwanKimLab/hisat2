@@ -4099,7 +4099,7 @@ static void driver(
                 std::ifstream infile((rep_adjIdxBase_3N[j] + ".1." + gfm_ext.c_str()).c_str());
                 rep_index_exists_3N[j] = infile.good();
             }
-            string test = rep_adjIdxBase_3N[j] + ".1." + gfm_ext.c_str();
+
             if(rep_index_exists_3N[j] && use_repeat_index) {
                 rgfms_3N[j] = new RFM<index_t>(
                         rep_adjIdxBase_3N[j],

@@ -577,6 +577,7 @@ public:
     void outputTags(BTString& o) {
         char buf[1024];
         if (mapped) {
+            o.append('\t');
             // AS
             assert(AS <= 0);
             o.append("AS:i:");
@@ -621,8 +622,6 @@ public:
             o.append("Yf:i:");
             itoa10<int>(Yf, buf);
             o.append(buf);
-
-
         }
         // unchanged Tags
         if (!unChangedTags.empty()) {
@@ -638,6 +637,7 @@ public:
     void outputTags(BTString& o, RepeatMappingPosition* repeatInfo){
         // this function is for repeat alignment output.
         char buf[1024];
+        o.append('\t');
         // AS
         assert(AS <= 0);
         o.append("AS:i:");
@@ -779,7 +779,12 @@ public:
         o.append('\t');
         // read quality
         o.append(readQuality.toZBuf());
-        o.append('\t');
+
+        // make sure there is no '\t' at the beginning of unChangedTags
+        while (!unChangedTags.empty() && unChangedTags[0] == '\t') {
+            unChangedTags.remove(0);
+        }
+
         // tags
         if (repeatInfo == NULL) {
             outputTags(o);
