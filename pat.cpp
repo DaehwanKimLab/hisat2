@@ -1535,26 +1535,28 @@ struct SRA_Read {
         qual.clear();
     }
 
-    void dumpFastQ(SStringExpandable<char>& OutBuf) {
-        OutBuf.clear();
+    void dumpFastQ(SStringExpandable<char>& out_buf, const char *newName = nullptr, size_t newNameLen = 0) {
+        out_buf.clear();
         // @NAME
         // Seq
         // +NAME
         // Quality
+        const char *namePtr = newName ? newName : name.buf();
+        size_t nameLen = newName ? newNameLen : name.length();
 
-        OutBuf.append('@');
-        OutBuf.append(name.buf(), name.length());
-        OutBuf.append('\n');
+        out_buf.append('@');
+        out_buf.append(namePtr, nameLen);
+        out_buf.append('\n');
 
-        OutBuf.append(patFw.toZBuf(), patFw.length());
-        OutBuf.append('\n');
+        out_buf.append(patFw.toZBuf(), patFw.length());
+        out_buf.append('\n');
 
-        OutBuf.append('+');
-        OutBuf.append(name.buf(), name.length());
-        OutBuf.append('\n');
+        out_buf.append('+');
+        out_buf.append(namePtr, nameLen);
+        out_buf.append('\n');
 
-        OutBuf.append(qual.buf(), qual.length());
-        OutBuf.append('\n');
+        out_buf.append(qual.buf(), qual.length());
+        out_buf.append('\n');
     };
 };
     
@@ -1745,7 +1747,8 @@ bool SRAPatternSource::readPair(
         rb.qual.install(pair.second.qual.buf(), pair.second.qual.length());
         rb.trimmed3 = gTrim3;
         rb.trimmed5 = gTrim5;
-        pair.second.dumpFastQ(rb.readOrigBuf);
+        // Use left read's name
+        pair.second.dumpFastQ(rb.readOrigBuf, pair.first.name.buf(), pair.first.name.length());
         paired = true;
     } else {
         rb.reset();
