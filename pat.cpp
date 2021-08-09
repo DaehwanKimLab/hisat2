@@ -1534,6 +1534,28 @@ struct SRA_Read {
         patFw.clear();
         qual.clear();
     }
+
+    void dumpFastQ(SStringExpandable<char>& OutBuf) {
+        OutBuf.clear();
+        // @NAME
+        // Seq
+        // +NAME
+        // Quality
+
+        OutBuf.append('@');
+        OutBuf.append(name.buf(), name.length());
+        OutBuf.append('\n');
+
+        OutBuf.append(patFw.toZBuf(), patFw.length());
+        OutBuf.append('\n');
+
+        OutBuf.append('+');
+        OutBuf.append(name.buf(), name.length());
+        OutBuf.append('\n');
+
+        OutBuf.append(qual.buf(), qual.length());
+        OutBuf.append('\n');
+    };
 };
     
 static const uint64_t buffer_size_per_thread = 4096;
@@ -1716,12 +1738,14 @@ bool SRAPatternSource::readPair(
     ra.qual.install(pair.first.qual.buf(), pair.first.qual.length());
     ra.trimmed3 = gTrim3;
     ra.trimmed5 = gTrim5;
+    pair.first.dumpFastQ(ra.readOrigBuf);
     if(pair.second.patFw.length() > 0) {
         rb.name.install(pair.first.name.buf(), pair.first.name.length());
         rb.patFw.install(pair.second.patFw.buf(), pair.second.patFw.length());
         rb.qual.install(pair.second.qual.buf(), pair.second.qual.length());
         rb.trimmed3 = gTrim3;
         rb.trimmed5 = gTrim5;
+        pair.second.dumpFastQ(rb.readOrigBuf);
         paired = true;
     } else {
         rb.reset();
