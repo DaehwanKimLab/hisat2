@@ -186,7 +186,7 @@ Generate 3N-conversion-table with `hisat-3n-table`:
   Only count the multiple aligned reads into 3N-conversion-table.
 
 * `-c/--CG-only`  
-  Only count the CpG island in reference genome. This option is designed for bisulfite sequencing reads.
+  Only count the CpG sites in reference genome. This option is designed for bisulfite sequencing reads.
 
 * `-p/--threads <int>`  
   Launch `int` parallel threads (default: 1) for table building.
@@ -211,7 +211,7 @@ Generate 3N-conversion-table with `hisat-3n-table`:
     # Generate the 3N-conversion-table for bisulfite sequencing data:  
       hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T
     
-    # Generate the 3N-conversion-table for TAPS data and only count base in CpG island and uniquely aligned:  
+    # Generate the 3N-conversion-table for TAPS data and only count base in CpG site and uniquely aligned:  
       hisat-3n-table -p 16 --alignments sorted_alignment_result.sam --ref genome.fa --output-name output.tsv --base-change C,T --CG-only --unique-only
     
     # Generate the 3N-conversion-table for bisulfite sequencing data from sorted BAM file:  
