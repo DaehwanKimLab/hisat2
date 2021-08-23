@@ -154,6 +154,11 @@ REPEAT_CPPS = \
 	bit_packed_array.cpp \
 	repeat_builder.cpp
 
+THREE_N_HEADERS = \
+	position_3n_table.h \
+	alignment_3n_table.h \
+	utility_3n_table.h
+
 HISAT2_CPPS_MAIN = $(SEARCH_CPPS) hisat2_main.cpp
 HISAT2_BUILD_CPPS_MAIN = $(BUILD_CPPS) hisat2_build_main.cpp
 HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
@@ -464,7 +469,7 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 # hisat-3n-table targets
 #
 
-hisat-3n-table: hisat_3n_table.cpp
+hisat-3n-table: hisat_3n_table.cpp $(THREE_N_HEADERS)
 	$(CXX) $(RELEASE_FLAGS) $(RELEASE_DEFS) $(EXTRA_FLAGS) $(NOASSERT_FLAGS) $(DEFS) -pthread -o $@ $<
 
 #
