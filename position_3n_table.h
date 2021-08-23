@@ -228,7 +228,7 @@ public:
             newPos->set(chromosome, location+i);
             b = &line[i];
             if (CG_only) {
-                if (i == 0 && lastBase == 'C' && *b == 'G') {
+                if (lastBase == 'C' && *b == 'G') {
                     refPositions.back()->set('+');
                     newPos->set('-');
                 }
