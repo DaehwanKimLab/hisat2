@@ -180,7 +180,7 @@ public:
      *  scan all base in read sequence label them if they are qualified.
      */
     void appendBase() {
-        if (!mapped) {
+        if (!mapped || sequenceCoveredLength > 500000) { // if the read's intron longer than 500,000 ignore this read
             return;
         }
 

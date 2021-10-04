@@ -270,7 +270,7 @@ public:
      * if the conversion type 1 is less, the read is mapped to REF-RC (-).
      */
     void makeYZ(char &YZ_string) {
-        if (conversionCount[0]>=conversionCount[1]) {
+        if (conversionCount[0] < conversionCount[1]) {
             YZ_string = '+';
         } else {
             YZ_string = '-';
@@ -440,15 +440,19 @@ public:
 
         int badConversion = 0;
         if (conversionCount[0] >= conversionCount[1]) {
-            badConversion = conversionCount[1];
-            Yf = conversionCount[0];
-        } else {
             badConversion = conversionCount[0];
             Yf = conversionCount[1];
+        } else {
+            badConversion = conversionCount[1];
+            Yf = conversionCount[0];
         }
 
         newXM += badConversion;
         newMismatch = newXM - XM;
+
+        if (newMismatch < 0){
+            newMismatch = 0;
+        }
 
         makeYZ(repeatYZ);
         return true;
@@ -550,15 +554,19 @@ public:
 
         int badConversion = 0;
         if (conversionCount[0] >= conversionCount[1]) {
-            badConversion = conversionCount[1];
-            Yf = conversionCount[0];
-        } else {
             badConversion = conversionCount[0];
             Yf = conversionCount[1];
+        } else {
+            badConversion = conversionCount[1];
+            Yf = conversionCount[0];
         }
 
         newXM += badConversion;
-        newXM -= XM; //new identified mismatch, it can be negative number
+        newXM -= XM;
+
+        if (newXM < 0){
+            newXM = 0;
+        }
 
         makeYZ(YZ);
         NM += newXM;
