@@ -270,7 +270,7 @@ public:
      * if the conversion type 1 is less, the read is mapped to REF-RC (-).
      */
     void makeYZ(char &YZ_string) {
-        if (conversionCount[0] < conversionCount[1]) {
+        if (conversionCount[0] >= conversionCount[1]) {
             YZ_string = '+';
         } else {
             YZ_string = '-';
@@ -439,12 +439,13 @@ public:
         if (isalpha(newMD_String[newMD_String.length()-1])) { newMD_String.append('0'); }
 
         int badConversion = 0;
+        // choose the smaller conversionCount as bad count (will give penalty). choose the bigger conversionCount as Yf.
         if (conversionCount[0] >= conversionCount[1]) {
-            badConversion = conversionCount[0];
-            Yf = conversionCount[1];
-        } else {
             badConversion = conversionCount[1];
             Yf = conversionCount[0];
+        } else {
+            badConversion = conversionCount[0];
+            Yf = conversionCount[1];
         }
 
         newXM += badConversion;
@@ -553,12 +554,13 @@ public:
         if (isalpha(MD[MD.length()-1])) { MD.append('0'); }
 
         int badConversion = 0;
+        // choose the smaller conversionCount as bad count (will give penalty). choose the bigger conversionCount as Yf.
         if (conversionCount[0] >= conversionCount[1]) {
-            badConversion = conversionCount[0];
-            Yf = conversionCount[1];
-        } else {
             badConversion = conversionCount[1];
             Yf = conversionCount[0];
+        } else {
+            badConversion = conversionCount[0];
+            Yf = conversionCount[1];
         }
 
         newXM += badConversion;
