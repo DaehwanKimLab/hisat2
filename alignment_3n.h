@@ -86,6 +86,7 @@ public:
     BTString YT; //"UU" for single-end. "CP" for concordant alignment, "DP" for disconcordant alignment, "UP" for else.
     // special tags in HISAT-3N
     int Yf; // number of conversion.
+    int Zf; // number of unconverted base.
     char YZ;  // this tag shows alignment strand:
               // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
               // - for REF-RC strand (conversionCount[1] is smaller)
@@ -117,7 +118,8 @@ public:
     bool repeat;
     bool pairToRepeat;
     RepeatMappingPositions repeatPositions; // to store the expanded repeat information
-    int conversionCount[2] = {0}; // there are two type of conversion could happen, save the number of conversion sperately.
+    int conversionCount[2] = {0}; // there are two type of conversion could happen, save the number of conversion separately.
+    int unConversionCount[2] = {0}; // save the unconverted base count.
     string intToBase = "ACGTN";
 
     void initialize() {
@@ -166,6 +168,8 @@ public:
         repeatPositions.initialize();
         conversionCount[0] = 0;
         conversionCount[1] = 0;
+        unConversionCount[0] = 0;
+        unConversionCount[1] = 0;
         passThroughLine.clear();
     }
 
@@ -348,7 +352,7 @@ public:
             int newXM = XM + newMismatch;
             int newNM = NM + newMismatch;
             int newAS = AS - 6*newMismatch;
-            repeatPositions.append(locationRepeat, chromosomeRepeat, refSequence,newAS, newMD, newXM, newNM, Yf, repeatYZ);
+            repeatPositions.append(locationRepeat, chromosomeRepeat, refSequence,newAS, newMD, newXM, newNM, Yf, Zf, repeatYZ);
 
             // if there are too many mappingPosition exist return.
             if (repeatPositions.size() >= repeatLimit || alignmentPositions.size() > repeatLimit) {
@@ -371,6 +375,8 @@ public:
 
         conversionCount[0] = 0;
         conversionCount[1] = 0;
+        unConversionCount[0] = 0;
+        unConversionCount[1] = 0;
 
         int readPos = 0;
         long long int refPos = 0;
@@ -392,6 +398,14 @@ public:
                     char readChar = readSequence[readPos];
                     char refChar = refSeq[refPos];
                     if (readChar == refChar) {
+                        if (refChar == usrInput_convertedFrom)
+                        {
+                            unConversionCount[0]++;
+                        }
+                        else if (refChar == usrInput_convertedFromComplement)
+                        {
+                            unConversionCount[1]++;
+                        }
                         count++;
                     } else {// mismatch
                         // output matched count
@@ -443,9 +457,11 @@ public:
         if (conversionCount[0] >= conversionCount[1]) {
             badConversion = conversionCount[1];
             Yf = conversionCount[0];
+            Zf = unConversionCount[0];
         } else {
             badConversion = conversionCount[0];
             Yf = conversionCount[1];
+            Zf = unConversionCount[1];
         }
 
         newXM += badConversion;
@@ -491,7 +507,6 @@ public:
         for (int i = 0; i < cigarSegments.size(); i++) {
             cigarSymbol = cigarSegments[i].getLabel();
             cigarLen = cigarSegments[i].getLen();
-
             if (cigarSymbol == 'S') {
                 readPos += cigarLen;
             } else if (cigarSymbol == 'N') {
@@ -501,6 +516,14 @@ public:
                     char readChar = readSequence[readPos];
                     char refChar = intToBase[*(refSeq + refPos)];
                     if (readChar == refChar) {
+                        if (refChar == usrInput_convertedFrom)
+                        {
+                            unConversionCount[0]++;
+                        }
+                        else if (refChar == usrInput_convertedFromComplement)
+                        {
+                            unConversionCount[1]++;
+                        }
                         count++;
                     } else {// mismatch
                         // output matched count
@@ -558,9 +581,11 @@ public:
         if (conversionCount[0] >= conversionCount[1]) {
             badConversion = conversionCount[1];
             Yf = conversionCount[0];
+            Zf = unConversionCount[0];
         } else {
             badConversion = conversionCount[0];
             Yf = conversionCount[1];
+            Zf = unConversionCount[1];
         }
 
         newXM += badConversion;
@@ -576,7 +601,7 @@ public:
         AS = AS - 6*newXM;
         BTString tmp;
         if (pairToRepeat) {
-            repeatPositions.append(location, chromosomeName, tmp,AS, MD, XM, NM, Yf, YZ);
+            repeatPositions.append(location, chromosomeName, tmp, AS, MD, XM, NM, Yf, Zf, YZ);
         }
         return true;
     }
@@ -631,6 +656,11 @@ public:
             // Yf
             o.append("Yf:i:");
             itoa10<int>(Yf, buf);
+            o.append(buf);
+            o.append('\t');
+            //Zf
+            o.append("Zf:i:");
+            itoa10<int>(Zf, buf);
             o.append(buf);
         }
         // unchanged Tags
@@ -703,6 +733,12 @@ public:
         o.append("Yf:i:");
         itoa10<int>(repeatInfo->Yf, buf);
         o.append(buf);
+        o.append('\t');
+        // Zf
+        o.append("Zf:i:");
+        itoa10<int>(repeatInfo->Zf, buf);
+        o.append(buf);
+        o.append('\t');
         // unchanged Tags
         if (!unChangedTags.empty()) {
             o.append('\t');
@@ -870,7 +906,6 @@ public:
             freeAlignments.push_back(alignments[i]);
         }
         alignments.clear();
-        alignmentPositions.initialize();
     }
 
     Alignments(BitPairReference* ref, bool inputDNA): bitReference(ref), DNA(inputDNA) {
