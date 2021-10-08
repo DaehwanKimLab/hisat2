@@ -738,7 +738,7 @@ public:
         o.append("Zf:i:");
         itoa10<int>(repeatInfo->Zf, buf);
         o.append(buf);
-        o.append('\t');
+
         // unchanged Tags
         if (!unChangedTags.empty()) {
             o.append('\t');
