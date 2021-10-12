@@ -34,7 +34,7 @@ extern bool CG_only;
 extern long long int loadingBlockSize;
 
 /**
- * store unique information for one base information with readID, primary, segment, and the base index in the convertedQualities or unconvertedQualities.
+ * store unique information for one base information with readID, and the quality.
  */
 class uniqueID
 {
