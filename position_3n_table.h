@@ -34,6 +34,27 @@ extern bool CG_only;
 extern long long int loadingBlockSize;
 
 /**
+ * store unique information for one base information with readID, primary, segment, and the base index in the convertedQualities or unconvertedQualities.
+ */
+class uniqueID
+{
+public:
+    unsigned long long readNameID;
+    bool isConverted;
+    char quality;
+    bool removed;
+
+    uniqueID(unsigned long long InReadNameID,
+             bool InIsConverted,
+             char& InQual){
+        readNameID = InReadNameID;
+        isConverted = InIsConverted;
+        quality = InQual;
+        removed = false;
+    }
+};
+
+/**
  * basic class to store reference position information
  */
 class Position{
@@ -44,7 +65,7 @@ public:
     char strand; // +(REF) or -(REF-RC)
     string convertedQualities; // each char is a mapping quality on this position for converted base.
     string unconvertedQualities; // each char is a mapping quality on this position for unconverted base.
-    vector<unsigned long long> readNameIDs; // each value represent a readName which contributed the base information.
+    vector<uniqueID> uniqueIDs; // each value represent a readName which contributed the base information.
                               // readNameIDs is to make sure no read contribute 2 times in same position.
 
     void initialize() {
@@ -53,19 +74,12 @@ public:
         strand = '?';
         convertedQualities.clear();
         unconvertedQualities.clear();
-        vector<unsigned long long>().swap(readNameIDs);
+        vector<uniqueID>().swap(uniqueIDs);
     }
 
     Position(){
         initialize();
     };
-
-    /*void cleanReadNames() {
-        mutex_.lock();
-        readNames.clear();
-        readNames.resize(10);
-        mutex_.unlock();
-    }*/
 
     /**
      * return true if there is mapping information in this reference position.
@@ -93,15 +107,15 @@ public:
      * if cannot find, return the index which has bigger value than input readNameID.
      */
     int searchReadNameID (unsigned long long&readNameID, int start, int end) {
-        if (readNameIDs.empty()) {
+        if (uniqueIDs.empty()) {
             return 0;
         }
         if (start <= end) {
             int middle = (start + end) / 2;
-            if (readNameIDs[middle] == readNameID) {
+            if (uniqueIDs[middle].readNameID == readNameID) {
                 return middle;
             }
-            if (readNameIDs[middle] > readNameID) {
+            if (uniqueIDs[middle].readNameID > readNameID) {
                 return searchReadNameID(readNameID, start, middle-1);
             }
             return searchReadNameID(readNameID, middle+1, end);
@@ -109,21 +123,45 @@ public:
         return start; // return the bigger one
     }
 
+
     /**
      * with a input readNameID, add it into readNameIDs.
      * if the input readNameID already exist in readNameIDs, return false.
      */
-    bool appendReadNameID(unsigned long long& readNameID) {
-        int idCount = readNameIDs.size();
-        if (idCount == 0 || readNameID > readNameIDs.back()) {
-            readNameIDs.push_back(readNameID);
+    bool appendReadNameID(PosQuality& InBase, Alignment& InAlignment) {
+        int idCount = uniqueIDs.size();
+        if (idCount == 0 || InAlignment.readNameID > uniqueIDs.back().readNameID) {
+            uniqueIDs.emplace_back(InAlignment.readNameID, InBase.converted, InBase.qual);
             return true;
         }
-        int index = searchReadNameID(readNameID, 0, idCount);
-        if (readNameIDs[index] == readNameID) {
+        int index = searchReadNameID(InAlignment.readNameID, 0, idCount);
+        if (uniqueIDs[index].readNameID == InAlignment.readNameID) {
+            // if the new base is consistent with exist base's conversion status, ignore
+            // otherwise, delete the exist conversion status
+            if (uniqueIDs[index].removed) {
+                return false;
+            }
+            if (uniqueIDs[index].isConverted != InBase.converted) {
+                uniqueIDs[index].removed = true;
+                if (uniqueIDs[index].isConverted) {
+                    for (int i = 0; i < convertedQualities.size(); i++) {
+                        if (convertedQualities[i] == InBase.qual) {
+                            convertedQualities.erase(convertedQualities.begin()+i);
+                            return false;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < unconvertedQualities.size(); i++) {
+                        if (unconvertedQualities[i] == InBase.qual) {
+                            unconvertedQualities.erase(unconvertedQualities.begin()+i);
+                            return false;
+                        }
+                    }
+                }
+            }
             return false;
         } else {
-            readNameIDs.insert(readNameIDs.begin()+index, readNameID);
+            uniqueIDs.emplace(uniqueIDs.begin()+index, InAlignment.readNameID, InBase.converted, InBase.qual);
             return true;
         }
     }
@@ -133,7 +171,7 @@ public:
      */
     void appendBase (PosQuality& input, Alignment& a) {
         mutex_.lock();
-        if (appendReadNameID(a.readNameID)) {
+        if (appendReadNameID(input,a)) {
             if (input.converted) {
                 convertedQualities += input.qual;
             } else {
@@ -259,13 +297,19 @@ public:
      * the output function for output thread.
      */
     void outputFunction(string outputFileName) {
+        ostream* out_ = &cout;
+        out_ = &cout;
         ofstream tableFile;
-        tableFile.open(outputFileName, ios_base::out);
-        tableFile << "ref\tpos\tstrand\tconvertedBaseQualities\tconvertedBaseCount\tunconvertedBaseQualities\tunconvertedBaseCount\n";
+        if (!outputFileName.empty()) {
+            tableFile.open(outputFileName, ios_base::out);
+            out_ = &tableFile;
+        }
+
+        *out_ << "ref\tpos\tstrand\tconvertedBaseQualities\tconvertedBaseCount\tunconvertedBaseQualities\tunconvertedBaseCount\n";
         Position* pos;
         while (working) {
             if (outputPositionPool.popFront(pos)) {
-                tableFile << pos->chromosome << '\t'
+                *out_ << pos->chromosome << '\t'
                           << to_string(pos->location) << '\t'
                           << pos->strand << '\t'
                           << pos->convertedQualities << '\t'
@@ -315,7 +359,7 @@ public:
             if (refPositions[index]->empty() || refPositions[index]->strand == '?') {
                 returnPosition(refPositions[index]);
             } else {
-                vector<unsigned long long>().swap(refPositions[index]->readNameIDs);
+                vector<uniqueID>().swap(refPositions[index]->uniqueIDs);
                 outputPositionPool.push(refPositions[index]);
             }
         }
