@@ -157,37 +157,46 @@ if $bisulfitereads; then
 		echo "Randomly Selected $nummethloc of $(cat temp_cpg_locs.txt | wc -l)"
 	        rm temp_cpg_locs.txt
 		cp temp_cpg_locs_select.txt temp_cpg_locs.txt
+	else 
+		echo "Generating for Maximum Number of Locations"; 
+		nummethloc=$(cat temp_cpg_locs.txt | wc -l)
 	fi
 	methlocs=$(cat temp_cpg_locs.txt);
-	if [[ -e temp_cpg_locs_probs.txt ]]; then 
-		rm temp_cpg_locs_probs.txt;
+	if [[ -e temp_cpg_locs_probs_from_R.csv ]]; then 
+		rm temp_cpg_locs_probs_from_R.csv;
 	fi;
-	for loc in $methlocs
-	do
-		echo "$loc,$(bc -l <<< "$RANDOM/32767")" >>temp_cpg_locs_probs.txt
-	done
+	Rscript getMethylationProfile.R
+	if [[ ! -s temp_cpg_locs_probs_from_R.csv ]]; then 
+		echo "Error generating Methylation Profile, is Rscript installed?"; 
+	fi	
 	echo "------------------------------------------------------------------------------------"
 fi
 	echo "------------------------------------------------------------------------------------"
 	echo "Generating the Reads File Now...                                                    "
+ 	bedtools getfasta -fi $genfile -bed temp_locs_ranges.bed > $outfile
+ 	echo "Reads Generated in file $outfile						          "
 	echo "------------------------------------------------------------------------------------"
- bedtools getfasta -fi $genfile -bed temp_locs_ranges.bed > $outfile
 
+ methpatternfile="temp_cpg_locs_probs_from_R.csv";
  if $bisulfitereads; then 
 	echo "------------------------------------------------------------------------------------"
 	echo "Methylating Generated Reads File $outfile,                                          "
 	echo "            according to methylation profile  $methpatternfile                      " 
-	readstart=$(cat $outfile | grep -o ":[0-9]*-" | tr -d ':' | tr -d '-')
-
-	methlocprob=$(cat temp_cpg_locs_probs.txt)
-	for rs in $readstart
-	do
-			echo "$rs	$(($rs+$readlen))"
-			seq $rs $(($rs+$readlen)) > "temp_patterns_for_grep.ptn"
-			sed 's/$/,/' temp_patterns_for_grep.ptn > temp_patterns_for_grep.ptn
-			cat temp_cpg_locs_probs.txt | grep -f temp_patterns_for_grep.ptn
-	done
+	cat $outfile | grep '>' > temp_split1.txt
+	cat $outfile | grep -v '>' > temp_split2.txt 
+	paste temp_split1.txt temp_split2.txt -d, > temp_combo_reads.csv
+	sleep 5
+	rm Methylated_reads_out_of_R.csv
+	Rscript methylateReads.R
+	cat Methylated_reads_out_of_R.csv | tail -n +2 > methreadout.csv
+	paste temp_combo_reads.csv methreadout.csv -d',' | grep -v ,NA | cut -f1,5 -d, | tr -d '\"' > methreads
+	paste temp_combo_reads.csv methreadout.csv -d',' | grep ,NA | cut -f1,2 -d, | tr -d '\"' > nonmethreads
+	cat methreads nonmethreads | sed 's/,/\n/' > $outfile
+	rm methreads nonmethreads
+	echo "Reads in file $outfile are now methylated according to ratios in $methpatternfile   " 
+	echo "Saving methylation pattern file as meth_pattern.csv                                 " 
+	cat $methpatternfile > meth_pattern.csv
 	echo "------------------------------------------------------------------------------------"
+
 fi
- rm temp_locs.txt
- rm temp_locs_ranges.bed
+ rm temp_*
