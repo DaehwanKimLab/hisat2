@@ -238,6 +238,7 @@ public:
     int NM;
     int YS;
     int Yf;
+    int Zf;
     char YZ;
     BTString refSequence;
     BTString repeatChromosome;
@@ -256,7 +257,8 @@ public:
                            BTString &inputMD,
                            int &inputXM,
                            int &inputNM,
-                           int &inputTC,
+                           int &inputYf,
+                           int &inputZf,
                            char &repeatYZ) {
         repeatLocation = inputLocation;
         repeatChromosome = inputChromosome;
@@ -265,7 +267,8 @@ public:
         MD = inputMD;
         XM = inputXM;
         NM = inputNM;
-        Yf = inputTC;
+        Yf = inputYf;
+        Zf = inputZf;
         YZ = repeatYZ;
         pairScore = numeric_limits<int>::min();
         flagInfoIndex = -1;
@@ -329,8 +332,9 @@ public:
                  int &XM,
                  int &NM,
                  int &Yf,
+                 int &Zf,
                  char &repeatYZ) {
-        positions.emplace_back(location, chromosome, refSequence, AS, MD, XM, NM, Yf, repeatYZ);
+        positions.emplace_back(location, chromosome, refSequence, AS, MD, XM, NM, Yf, Zf, repeatYZ);
     }
 
     /**

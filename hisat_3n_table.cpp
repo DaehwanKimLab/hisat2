@@ -173,8 +173,8 @@ static void parseOptions(int argc, const char **argv) {
     }
 
     // check filenames
-    if (refFileName.empty() || alignmentFileName.empty() || outputFileName.empty()) {
-        cerr << "No reference, SAM, or output file specified!" << endl;
+    if (refFileName.empty() || alignmentFileName.empty()) {
+        cerr << "No reference or SAM file specified!" << endl;
         printHelp(cerr);
         throw 1;
     }
