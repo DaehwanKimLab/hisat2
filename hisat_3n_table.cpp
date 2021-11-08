@@ -75,7 +75,7 @@ static void printHelp(ostream& out) {
         << "hisat-3n-table [options]* --alignments <alignmentFile> --ref <refFile> --output-name <outputFile> --base-change <char1,char2>" << endl
         << "  <alignmentFile>           SORTED SAM filename. Please enter '-' for standard input." << endl
         << "  <refFile>                 reference file (should be FASTA format)." << endl
-        << "  <outputFile>              file name to save the 3n table (tsv format)." << endl
+        << "  <outputFile>              file name to save the 3n table (tsv format). By default, alignments are written to the “standard out” or “stdout” filehandle (i.e. the console)." << endl
         << "  <chr1,chr2>               the char1 is the nucleotide converted from, the char2 is the nucleotide converted to." << endl;
     out << "Options (defaults in parentheses):" << endl
         << " Input:" << endl
