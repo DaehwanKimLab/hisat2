@@ -717,10 +717,15 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
             if (not os.path.exists(methyl_profile)):
                 print("Methylation File ", methyl_profile, " Does not exist, a random one will be created")
                 [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = genRandomMethylationProfile(genome_seq,"CG",methyl_profile)
+                meth_cglocs_num=[int(i) for i in meth_cglocs]
+                meth_cglocs_num=set(meth_cglocs_num)
+                methprodict=dict(zip(meth_cglocs_num,meth_cgmpro))
             else:
                 print("Reading Methylation Information from ", methyl_profile, " for methylating reads.")
                 [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = readMethylationProfile(methyl_profile)
-	
+                meth_cglocs_num=[int(i) for i in meth_cglocs]
+                meth_cglocs_num=set(meth_cglocs_num)
+                methprodict=dict(zip(meth_cglocs_num,meth_cgmpro))
     if verbose: 
         if methylate_reads:
             print("Determined that there were ", len(meth_cglocs), " locations for methylation")
@@ -864,6 +869,13 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                 TI = "\tTI:Z:{}".format(transcript_id)
             else:
                 XS, TI = "", ""                
+            
+            if (methylate_reads):
+                if (verbose):
+                    print("This read (", pos, ") will be methylated: " ,read_seq);
+                read_seq=methylateRead(read_seq,pos,meth_cglocs_num,meth_cgstra,meth_cgmpro,meth_cgkeys,methprodict);
+                if paired_end:
+                    read2_seq=methylateRead(read2_seq,pos2,meth_cglocs_num,meth_cgstra,meth_cgmpro,meth_cgkeys,methprodict);
 
             print(">{}".format(cur_read_id), file=read_file)
             if swapped:
@@ -898,11 +910,11 @@ def genRandomMethylationProfile(genome_dic,locflag,ofilename):
 			cgstra.append("+")
 			cgmpro.append(random.random())
 			cgkeys.append(k)
-		for match in re.finditer(reverse_complement(locflag),genome_dic[k]):
-			cglocs.append(match.span()[1])
-			cgstra.append("-")
-			cgmpro.append(random.random())
-			cgkeys.append(k)
+		#for match in re.finditer(reverse_complement(locflag),genome_dic[k]):
+		#	cglocs.append(match.span()[1])
+		#	cgstra.append("-")
+		#	cgmpro.append(random.random())
+		#	cgkeys.append(k)
 	with open(ofilename,'wt') as out_file:
 		tsv_writer = csv.writer(out_file, delimiter='\t')
 		tsv_writer.writerow(['ref','loc','str','pro'])
@@ -928,6 +940,21 @@ def readMethylationProfile(ifilename):
 			cgmpro.append(linepieces[3])
 	return(cglocs,cgstra,cgmpro,cgkeys)
 	
+def methylateRead(exseq,pos,lnum,s,p,k,methprodict):
+    readpos=[i for i,y in enumerate([x in lnum for x in range(pos,(pos+len(exseq)))]) if y]
+    refpos=[x+pos for x in readpos]
+    
+    prop=[int(methprodict[str(z)]) for z in refpos]
+    #refidxflt=[val for sublist in refidx for val in sublist]
+    #prop=[float(p[i]) for i in refidxflt]
+    flip=[random.random() for i in range(len(prop))];
+    meth=[prop[i]>flip[i] for i in range(len(flip))];
+    mread=exseq
+    for i in range(len(meth)):
+        methstat=meth[i]
+        if methstat:
+            mread = mread[:readpos[i]] + 'T' + mread[(readpos[i]+1):]        
+    return(mread)
 
 if __name__ == '__main__':
     parser = ArgumentParser(
