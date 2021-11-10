@@ -709,25 +709,28 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
     genome_seq = read_genome(genome_file)
     methylate_reads = (methyl_profile!="N")
     methyl_file = methyl_profile; 
-    if (verbose):
-        if (not methylate_reads):
+    
+    if (not methylate_reads): 
+        if verbose:
             print("Not Methylating Reads")
-        if (methylate_reads):
+    
+    if (methylate_reads):
+        if verbose:
             print("Methyl Profile Type: ", methyl_profile)
-            if (not os.path.exists(methyl_profile)):
-                print("Methylation File ", methyl_profile, " Does not exist, a random one will be created")
-                [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = genRandomMethylationProfile(genome_seq,"CG",methyl_profile)
-                meth_cglocs_num=[int(i) for i in meth_cglocs]
-                meth_cglocs_num=set(meth_cglocs_num)
-                methprodict=dict(zip(meth_cglocs_num,meth_cgmpro))
-            else:
-                print("Reading Methylation Information from ", methyl_profile, " for methylating reads.")
-                [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = readMethylationProfile(methyl_profile)
-                meth_cglocs_num=[int(i) for i in meth_cglocs]
-                meth_cglocs_num=set(meth_cglocs_num)
-                methprodict=dict(zip(meth_cglocs_num,meth_cgmpro))
-    if verbose: 
-        if methylate_reads:
+        if (not os.path.exists(methyl_profile)):
+            print("Methylation File ", methyl_profile, " Does not exist, a random one will be created")
+            genRandomMethylationProfile(genome_seq,"CG",methyl_profile);
+            [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = readMethylationProfile(methyl_profile)
+            meth_cglocs_num=[int(i) for i in meth_cglocs]
+            meth_cglocs_num=set(meth_cglocs_num)
+            methprodict=dict(zip(meth_cglocs,meth_cgmpro))
+        else:
+            print("Reading Methylation Information from ", methyl_profile, " for methylating reads.")
+            [meth_cglocs,meth_cgstra,meth_cgmpro,meth_cgkeys] = readMethylationProfile(methyl_profile)
+            meth_cglocs_num=[int(i) for i in meth_cglocs]
+            meth_cglocs_num=set(meth_cglocs_num)
+            methprodict=dict(zip(meth_cglocs,meth_cgmpro))
+        if verbose: 
             print("Determined that there were ", len(meth_cglocs), " locations for methylation")
 
 			  
@@ -871,11 +874,11 @@ def simulate_reads(genome_file, gtf_file, snp_file, base_fname,
                 XS, TI = "", ""                
             
             if (methylate_reads):
-                if (verbose):
-                    print("This read (", pos, ") will be methylated: " ,read_seq);
-                read_seq=methylateRead(read_seq,pos,meth_cglocs_num,meth_cgstra,meth_cgmpro,meth_cgkeys,methprodict);
+                #if (verbose):
+                    #print("This read (", pos, ") will be methylated: " ,read_seq);
+                read_seq=methylateRead(read_seq,pos,meth_cglocs_num,methprodict,meth_cgstra,meth_cgkeys);
                 if paired_end:
-                    read2_seq=methylateRead(read2_seq,pos2,meth_cglocs_num,meth_cgstra,meth_cgmpro,meth_cgkeys,methprodict);
+                    read2_seq=methylateRead(read2_seq,pos2,meth_cglocs_num,methprodict,meth_cgstra,meth_cgkeys);
 
             print(">{}".format(cur_read_id), file=read_file)
             if swapped:
@@ -940,13 +943,10 @@ def readMethylationProfile(ifilename):
 			cgmpro.append(linepieces[3])
 	return(cglocs,cgstra,cgmpro,cgkeys)
 	
-def methylateRead(exseq,pos,lnum,s,p,k,methprodict):
+def methylateRead(exseq,pos,lnum,pdic,s,k):
     readpos=[i for i,y in enumerate([x in lnum for x in range(pos,(pos+len(exseq)))]) if y]
     refpos=[x+pos for x in readpos]
-    
-    prop=[int(methprodict[str(z)]) for z in refpos]
-    #refidxflt=[val for sublist in refidx for val in sublist]
-    #prop=[float(p[i]) for i in refidxflt]
+    prop=[float(pdic[str(x)]) for x in refpos];
     flip=[random.random() for i in range(len(prop))];
     meth=[prop[i]>flip[i] for i in range(len(flip))];
     mread=exseq
@@ -955,7 +955,7 @@ def methylateRead(exseq,pos,lnum,s,p,k,methprodict):
         if methstat:
             mread = mread[:readpos[i]] + 'T' + mread[(readpos[i]+1):]        
     return(mread)
-
+    
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Simulate reads from GENOME (fasta) and GTF files')
