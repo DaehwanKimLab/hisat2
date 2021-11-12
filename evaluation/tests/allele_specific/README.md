@@ -4,9 +4,8 @@
 # Build hisat2-quant binary program
 make hisat2-quant-bin
 
-# Run hisat-quant-bin
-./hisat2-quant-bin
-
+# Run hisat-quant (wrapper of hisat2-quant-bin)
+./hisat2-quant evaluation/tests/allele_specific/sim.gene.sam
 
 # Directories
 #   hisat2/evaluation/tests/allele_specific
