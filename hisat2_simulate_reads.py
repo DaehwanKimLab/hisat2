@@ -1150,7 +1150,7 @@ def simulate_RNA_reads(base_fname, genome_seq, genes, transcripts, genome_snps,
     gene_ids = gene_ids[:num_genes]
 
     # DK - debugging purposes
-    gene_ids = set(["ENSG00000100095"])
+    # gene_ids = set(["ENSG00000100095"])
 
     transcript_ids = []
     for gene_id in gene_ids:
