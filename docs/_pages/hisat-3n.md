@@ -76,7 +76,7 @@ These files constitute the hisat-3n index and no other file is needed to alignme
   | Conversion Types                   | HISAT-3N index suffix         |
   |:----------------------------------:|:-----------------------------:|
   |C -> T<br>T -> C<br>A -> G<br>G -> A|.3n.CT.\*.ht2 <br>.3n.GA.\*.ht2|
-  |A -> C<br>C -> A<br>G -> T<br>T -> C|.3n.AC.\*.ht2 <br>.3n.TG.\*.ht2|
+  |A -> C<br>C -> A<br>G -> T<br>T -> G|.3n.AC.\*.ht2 <br>.3n.TG.\*.ht2|
   |A -> T<br>T -> A                    |.3n.AT.\*.ht2 <br>.3n.TA.\*.ht2|
   |C -> G<br>G -> C                    |.3n.CG.\*.ht2 <br>.3n.GC.\*.ht2|
 
