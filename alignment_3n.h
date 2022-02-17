@@ -35,12 +35,15 @@
 #include <queue>
 #include "position_3n.h"
 #include "utility_3n.h"
+#include "simple_func.h"
 
 
 extern char usrInput_convertedFrom;
 extern char usrInput_convertedTo;
 extern char usrInput_convertedFromComplement;
 extern char usrInput_convertedToComplement;
+extern SimpleFunc scoreMin;   // minimum valid score as function of read len
+extern int   penMmcMax;       // max mm penalty
 
 extern char hs3N_convertedFrom;
 extern char hs3N_convertedTo;
@@ -88,8 +91,8 @@ public:
     int Yf; // number of conversion.
     int Zf; // number of unconverted base.
     char YZ;  // this tag shows alignment strand:
-              // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
-              // - for REF-RC strand (conversionCount[1] is smaller)
+    // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
+    // - for REF-RC strand (conversionCount[1] is smaller)
     // unChanged tags
     BTString unChangedTags;
     BTString passThroughLine; // this is controlled by print_xr_ in SamConfig
@@ -111,6 +114,7 @@ public:
     bool forward;
     bool mapped;
     bool concordant;
+    int64_t MinimumScore;
     int pairSegment; // 0 for first segment, 1 for second segment.
     struct ht2_repeat_expand_result *repeatResult = nullptr;
     int pairScore; // to identify the better pair
@@ -260,6 +264,7 @@ public:
         if (!mapped) {
             repeat = false;
         }
+        MinimumScore = scoreMin.f<TAlScore>(readSequence.length());
     }
 
     /**
@@ -351,7 +356,11 @@ public:
 
             int newXM = XM + newMismatch;
             int newNM = NM + newMismatch;
-            int newAS = AS - 6*newMismatch;
+            int newAS = AS - penMmcMax * newMismatch;
+            if (newAS < MinimumScore)
+            {
+                continue;
+            }
             repeatPositions.append(locationRepeat, chromosomeRepeat, refSequence,newAS, newMD, newXM, newNM, Yf, Zf, repeatYZ);
 
             // if there are too many mappingPosition exist return.
@@ -427,9 +436,6 @@ public:
                             newXM++;
                         }
                         newMD_String.append(refChar);
-                    }
-                    if ((conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
-                        return false;
                     }
                     readPos++;
                     refPos++;
@@ -547,9 +553,6 @@ public:
                         }
                         MD.append(refChar);
                     }
-                    if ((conversionCount[0] >= conversionCount[1] ? conversionCount[1]:conversionCount[0])> readSequence.length()/25) {
-                        return false;
-                    }
                     readPos++;
                     refPos++;
                 }
@@ -598,7 +601,11 @@ public:
         makeYZ(YZ);
         NM += newXM;
         XM += newXM;
-        AS = AS - 6*newXM;
+        AS = AS - penMmcMax * newXM;
+        if (AS < MinimumScore)
+        {
+            return false;
+        }
         BTString tmp;
         if (pairToRepeat) {
             repeatPositions.append(location, chromosomeName, tmp, AS, MD, XM, NM, Yf, Zf, YZ);
