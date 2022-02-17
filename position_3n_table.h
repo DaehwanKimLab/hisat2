@@ -384,11 +384,10 @@ public:
                     return;
                 }
                 chromosome = getChrName(line);
+                streampos currentPos = refFile.tellg();
+                chromosomePos.append(chromosome, currentPos);
                 if (chromosome == targetChromosome) {
                     load = true;
-                } else {
-                    streampos currentPos = refFile.tellg();
-                    chromosomePos.append(chromosome, currentPos);
                 }
                 lastBase = 'X';
                 location = 0;
