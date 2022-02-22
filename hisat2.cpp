@@ -189,7 +189,7 @@ static bool  msNoCache;       // true -> disable local cache
 static int   bonusMatchType;  // how to reward matches
 static int   bonusMatch;      // constant reward if bonusMatchType=constant
 static int   penMmcType;      // how to penalize mismatches
-static int   penMmcMax;       // max mm penalty
+int   penMmcMax;       // max mm penalty
 static int   penMmcMin;       // min mm penalty
 static int   penScMax;       // max sc penalty
 static int   penScMin;       // min sc penalty
@@ -202,7 +202,7 @@ static int   penRdGapConst;   // constant cost of extending a gap in the read
 static int   penRfGapConst;   // constant cost of extending a gap in the reference
 static int   penRdGapLinear;  // coeff of linear term for cost of gap extension in read
 static int   penRfGapLinear;  // coeff of linear term for cost of gap extension in ref
-static SimpleFunc scoreMin;   // minimum valid score as function of read len
+SimpleFunc scoreMin;   // minimum valid score as function of read len
 static SimpleFunc nCeil;      // max # Ns allowed as function of read len
 static SimpleFunc msIval;     // interval between seeds as function of read len
 static double descConsExp;    // how to adjust score minimum as we descent further into index-assisted alignment
