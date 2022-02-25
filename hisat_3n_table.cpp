@@ -271,7 +271,6 @@ int hisat_3n_table()
     long long int reloadPos; // the position in reference that we need to reload.
     long long int lastPos = 0; // the position on last SAM line. compare lastPos with samPos to make sure the SAM is sorted.
 
-    //if (alignmentFile->is_open()) {
     while (alignmentFile->good()) {
         positions->getFreeStringPointer(line);
         if (!getline(*alignmentFile, *line)) {
