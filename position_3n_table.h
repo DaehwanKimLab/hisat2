@@ -276,6 +276,7 @@ public:
                 chromosomePos.append(chromosome, currentPos);
             }
         }
+        chromosomePos.sort();
     }
 
     /**

@@ -263,6 +263,10 @@ public:
         chromosome = inputChromosome;
         linePos = inputPos;
     }
+
+    bool operator < (const ChromosomeFilePosition& in) const{
+        return chromosome < in.chromosome;
+    }
 };
 
 /**
@@ -278,8 +282,6 @@ public:
     void append (string &chromosome, streampos& linePos) {
         pos.push_back(ChromosomeFilePosition(chromosome, linePos));
     }
-
-
 
     /**
      * make binary search on pos for target chromosome name
@@ -303,11 +305,22 @@ public:
         }
     }
 
+    /**
+     * given targetChromosome name, return its streampos
+     */
     streampos getChromosomePosInRefFile(string &targetChromosome)
     {
         int index = findChromosome(targetChromosome, 0, pos.size()-1);
         assert(pos[index].chromosome == targetChromosome);
         return pos[index].linePos;
+    }
+
+    /**
+     * sort the pos by chromosome name
+     */
+    void sort()
+    {
+        std::sort(pos.begin(), pos.end());
     }
 };
 #endif //UTILITY_3N_TABLE_H
