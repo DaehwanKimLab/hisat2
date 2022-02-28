@@ -263,6 +263,10 @@ public:
         chromosome = inputChromosome;
         linePos = inputPos;
     }
+
+    bool operator < (const ChromosomeFilePosition& in) const{
+        return chromosome < in.chromosome;
+    }
 };
 
 /**
@@ -271,59 +275,52 @@ public:
 class ChromosomeFilePositions {
 public:
     vector <ChromosomeFilePosition> pos;
-    streampos largestPos;
-
-    /**
-     * input chromosome name, return it's streamPosition.
-     * if the chromosome is not in pos, return 0 (first position).
-     */
-    streampos getStreamPos(string &chromosome) {
-        if (pos.empty()) {
-             return 0;
-        }
-        int index = searchChromosome(chromosome, 0, pos.size()-1);
-        if (pos[index].chromosome == chromosome) {
-            return pos[index].linePos;
-        } else {
-            return largestPos;
-        }
-    }
 
     /**
      * input the chromosome name and it's streamPos, if it is not in pos, add it.
      */
     void append (string &chromosome, streampos& linePos) {
-        if (linePos > largestPos) {
-            largestPos = linePos;
-        }
-        if (pos.empty() || chromosome > pos.back().chromosome) {
-            pos.push_back(ChromosomeFilePosition(chromosome, linePos));
-            return;
-        }
-        int index = searchChromosome(chromosome, 0, pos.size()-1);
-        if (pos[index].chromosome != chromosome) {
-            pos.insert(pos.begin()+index, ChromosomeFilePosition(chromosome, linePos));
-        }
+        pos.push_back(ChromosomeFilePosition(chromosome, linePos));
     }
 
     /**
      * make binary search on pos for target chromosome name
      */
-    int searchChromosome(string &targetChromosome, int start, int end) {
-        if (pos.empty() || targetChromosome > pos.back().chromosome) {
-            return 0;
-        }
+    int findChromosome(string &targetChromosome, int start, int end) {
         if (start <= end) {
             int middle = (start + end) / 2;
             if (pos[middle].chromosome == targetChromosome) {
                 return middle;
             }
             if (pos[middle].chromosome > targetChromosome) {
-                return searchChromosome(targetChromosome, start, middle-1);
+                return findChromosome(targetChromosome, start, middle-1);
             }
-            return searchChromosome(targetChromosome, middle+1, end);
+            return findChromosome(targetChromosome, middle+1, end);
         }
-        return start; // return the bigger one
+        else
+        {
+            // cannot find the chromosome! throw!
+            cerr << "Cannot find the chromosome: " << targetChromosome << " in reference file." << endl;
+            throw 1;
+        }
+    }
+
+    /**
+     * given targetChromosome name, return its streampos
+     */
+    streampos getChromosomePosInRefFile(string &targetChromosome)
+    {
+        int index = findChromosome(targetChromosome, 0, pos.size()-1);
+        assert(pos[index].chromosome == targetChromosome);
+        return pos[index].linePos;
+    }
+
+    /**
+     * sort the pos by chromosome name
+     */
+    void sort()
+    {
+        std::sort(pos.begin(), pos.end());
     }
 };
 #endif //UTILITY_3N_TABLE_H

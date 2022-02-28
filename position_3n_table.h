@@ -214,6 +214,7 @@ public:
             workerLock.push_back(new mutex);
         }
         refFile.open(inputRefFileName, ios_base::in);
+        LoadChromosomeNamesPos();
     }
 
     ~Positions() {
@@ -239,8 +240,15 @@ public:
      * this is important when there is space in chromosome name. the SAM information only contain the first word.
      */
     string getChrName(string& inputLine) {
-        size_t endPosition = inputLine.find(' ', 0);
-        string name = inputLine.substr(1, endPosition-1);
+        string name;
+        for (int i = 1; i < inputLine.size(); i++)
+        {
+            char c = inputLine[i];
+            if (isspace(c)){
+                break;
+            }
+            name += c;
+        }
 
         if(removedChrName) {
             if(name.find("chr") == 0) {
@@ -252,6 +260,23 @@ public:
             }
         }
         return name;
+    }
+
+
+    /**
+     * Scan the reference file. Record each chromosome and its position in file.
+     */
+    void LoadChromosomeNamesPos() {
+        string line;
+        while (refFile.good()) {
+            getline(refFile, line);
+            if (line.front() == '>') { // this line is chromosome name
+                chromosome = getChrName(line);
+                streampos currentPos = refFile.tellg();
+                chromosomePos.append(chromosome, currentPos);
+            }
+        }
+        chromosomePos.sort();
     }
 
     /**
@@ -372,7 +397,7 @@ public:
     void loadNewChromosome(string targetChromosome) {
         refFile.clear();
         // find the start position in file based on chromosome name.
-        streampos startPos = chromosomePos.getStreamPos(targetChromosome);
+        streampos startPos = chromosomePos.getChromosomePosInRefFile(targetChromosome);
         refFile.seekg(startPos, ios::beg);
         refCoveredPosition = 2 * loadingBlockSize;
         string line;
@@ -384,18 +409,12 @@ public:
                     return;
                 }
                 chromosome = getChrName(line);
-                if (chromosome == targetChromosome) {
-                    load = true;
-                } else {
-                    streampos currentPos = refFile.tellg();
-                    chromosomePos.append(chromosome, currentPos);
-                }
+                assert(chromosome == targetChromosome);
+                load = true;
                 lastBase = 'X';
                 location = 0;
             } else {
-                if (!load) {
-                    continue;
-                }
+                assert(load);
                 if (line.empty()) { continue; }
                 // change all base to upper case
                 for (int i = 0; i < line.size(); i++) {
@@ -406,11 +425,6 @@ public:
                     return;
                 }
             }
-        }
-        if (chromosome != targetChromosome) {
-            // cannot find the chromosome! throw!
-            cerr << "Cannot find the chromosome: " << targetChromosome << " in reference file." << endl;
-            throw 1;
         }
     }
 
