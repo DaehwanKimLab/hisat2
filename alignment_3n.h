@@ -90,9 +90,9 @@ public:
     // special tags in HISAT-3N
     int Yf; // number of conversion.
     int Zf; // number of unconverted base.
-    char YZ;  // this tag shows alignment strand:
-    // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
-    // - for REF-RC strand (conversionCount[1] is smaller)
+    char YZ;  // this tag shows alignment strand: check makeYZ function for the classification rule
+              // + for REF strand (conversionCount[0] is equal or smaller than conversionCount[1]),
+              // - for REF-RC strand (conversionCount[1] is smaller)
     // unChanged tags
     BTString unChangedTags;
     BTString passThroughLine; // this is controlled by print_xr_ in SamConfig
@@ -150,6 +150,7 @@ public:
         MD.clear();
         YT.clear();
         Yf = 0;
+        Zf = 0;
         unChangedTags.clear();
 
         outputted = false;
@@ -275,15 +276,61 @@ public:
 
     /**
      * make YZ tag.
+     * if (no conversion) or (conversion type 0 == conversion type 1):
+     *      if the (pairSegment is 0) && (forward) => YZ = +
+     *      if the (pairSegment is 0) && (reverse) => YZ = -
+     *      if the (pairSegment is 1) && (forward) => YZ = -
+     *      if the (pairSegment is 1) && (reverse) => YZ = +
      * if the conversion type 0 is less, the read is mapped to REF (+).
      * if the conversion type 1 is less, the read is mapped to REF-RC (-).
      */
     void makeYZ(char &YZ_string) {
-        if (conversionCount[0] >= conversionCount[1]) {
+        if ((conversionCount[0] == 0 && conversionCount[1] == 0) || conversionCount[0] == conversionCount[1])
+        {
+            if (pairSegment == 0 && forward) {
+                YZ_string = '+';
+            } else if (pairSegment == 0 && !forward) {
+                YZ_string = '-';
+            } else if (pairSegment == 1 && forward) {
+                YZ_string = '-';
+            } else if (pairSegment == 1 && !forward) {
+                YZ_string = '+';
+            }
+        } else if  (conversionCount[0] >= conversionCount[1]) {
             YZ_string = '+';
         } else {
             YZ_string = '-';
         }
+    }
+
+    /**
+     * make Yf tag, Yf tag is to count the number of conversion in the string.
+     * use YZ tag to decide which type of conversion is legal conversion.
+     */
+    int makeYf(char YZTag) {
+        int outYf = -1;
+        if (YZTag == '+'){
+            outYf = conversionCount[0];
+        } else if (YZTag == '-'){
+            outYf = conversionCount[1];
+        }
+        assert(outYf >= 0);
+        return outYf;
+    }
+
+    /**
+     * make Zf tag, Zf tag is to count the number of un-converted base in the string.
+     * use YZ tag to decide which type of conversion is legal conversion.
+     */
+    int makeZf(char YZTag) {
+        int outZf = -1;
+        if (YZTag == '+'){
+            outZf = unConversionCount[0];
+        } else if (YZTag == '-'){
+            outZf = unConversionCount[1];
+        }
+        assert (outZf >= 0);
+        return outZf;
     }
 
     /**
@@ -350,7 +397,9 @@ public:
             BTString newMD;
             int newMismatch = 0;
             char repeatYZ;
-            if (!constructRepeatMD(refSequence, newMD, newMismatch, repeatYZ)) {
+            int repeatYf;
+            int repeatZf;
+            if (!constructRepeatMD(refSequence, newMD, newMismatch, repeatYf, repeatZf, repeatYZ)) {
                 continue;
             }
 
@@ -361,7 +410,7 @@ public:
             {
                 continue;
             }
-            repeatPositions.append(locationRepeat, chromosomeRepeat, refSequence,newAS, newMD, newXM, newNM, Yf, Zf, repeatYZ);
+            repeatPositions.append(locationRepeat, chromosomeRepeat, refSequence,newAS, newMD, newXM, newNM, repeatYf, repeatZf, repeatYZ);
 
             // if there are too many mappingPosition exist return.
             if (repeatPositions.size() >= repeatLimit || alignmentPositions.size() > repeatLimit) {
@@ -379,7 +428,7 @@ public:
      * for each repeat mapping position, construct its MD
      * return true if the mapping result does not have a lot of mismatch, else return false.
      */
-    bool constructRepeatMD(BTString &refSeq, BTString &newMD_String, int &newMismatch, char &repeatYZ) {
+    bool constructRepeatMD(BTString &refSeq, BTString &newMD_String, int &newMismatch, int& repeatYf, int& repeatZf, char &repeatYZ) {
         char buf[1024];
 
         conversionCount[0] = 0;
@@ -458,17 +507,17 @@ public:
         if (isalpha(newMD_String[0])) { newMD_String.insert('0', 0); }
         if (isalpha(newMD_String[newMD_String.length()-1])) { newMD_String.append('0'); }
 
+        makeYZ(repeatYZ);
         int badConversion = 0;
-        // choose the smaller conversionCount as bad count (will give penalty). choose the bigger conversionCount as Yf.
-        if (conversionCount[0] >= conversionCount[1]) {
+        // identify the bad conversion number based on repeatYZ;
+        if (repeatYZ == '+') {
             badConversion = conversionCount[1];
-            Yf = conversionCount[0];
-            Zf = unConversionCount[0];
         } else {
             badConversion = conversionCount[0];
-            Yf = conversionCount[1];
-            Zf = unConversionCount[1];
         }
+
+        repeatYf = makeYf(repeatYZ);
+        repeatZf = makeZf(repeatZf);
 
         newXM += badConversion;
         newMismatch = newXM - XM;
@@ -477,7 +526,6 @@ public:
             newMismatch = 0;
         }
 
-        makeYZ(repeatYZ);
         return true;
     }
 
@@ -579,17 +627,16 @@ public:
         if (isalpha(MD[0])) { MD.insert('0', 0); }
         if (isalpha(MD[MD.length()-1])) { MD.append('0'); }
 
+        makeYZ(YZ);
         int badConversion = 0;
-        // choose the smaller conversionCount as bad count (will give penalty). choose the bigger conversionCount as Yf.
-        if (conversionCount[0] >= conversionCount[1]) {
+        // identify the bad conversion number based on YZ tag;
+        if (YZ == '+') {
             badConversion = conversionCount[1];
-            Yf = conversionCount[0];
-            Zf = unConversionCount[0];
         } else {
             badConversion = conversionCount[0];
-            Yf = conversionCount[1];
-            Zf = unConversionCount[1];
         }
+        Yf = makeYf(YZ);
+        Zf = makeZf(YZ);
 
         newXM += badConversion;
         newXM -= XM;
@@ -598,7 +645,7 @@ public:
             newXM = 0;
         }
 
-        makeYZ(YZ);
+
         NM += newXM;
         XM += newXM;
         AS = AS - penMmcMax * newXM;
