@@ -54,6 +54,7 @@ extern vector<ht2_handle_t> repeatHandles;
 extern struct ht2_index_getrefnames_result *refNameMap;
 extern int repeatLimit;
 extern bool uniqueOutputOnly;
+extern bool directional3NMapping;
 
 using namespace std;
 
@@ -276,16 +277,16 @@ public:
 
     /**
      * make YZ tag.
-     * if (no conversion) or (conversion type 0 == conversion type 1):
-     *      if the (pairSegment is 0) && (forward) => YZ = +
-     *      if the (pairSegment is 0) && (reverse) => YZ = -
-     *      if the (pairSegment is 1) && (forward) => YZ = -
-     *      if the (pairSegment is 1) && (reverse) => YZ = +
+     * if (no conversion) or (conversion type 0 == conversion type 1) or (directional mapping):
+     *      if the (pairSegment is 0) && (forward) => YZ = REF (+)
+     *      if the (pairSegment is 0) && (reverse) => YZ = REF-RC (-)
+     *      if the (pairSegment is 1) && (forward) => YZ = REF-RC (-)
+     *      if the (pairSegment is 1) && (reverse) => YZ = REF (+)
      * if the conversion type 0 is less, the read is mapped to REF (+).
      * if the conversion type 1 is less, the read is mapped to REF-RC (-).
      */
     void makeYZ(char &YZ_string) {
-        if ((conversionCount[0] == 0 && conversionCount[1] == 0) || conversionCount[0] == conversionCount[1])
+        if ((conversionCount[0] == 0 && conversionCount[1] == 0) || conversionCount[0] == conversionCount[1] || directional3NMapping)
         {
             if (pairSegment == 0 && forward) {
                 YZ_string = '+';
@@ -805,6 +806,7 @@ public:
      * output alignment. this function is for both repeat and non-repeat alignment.
      */
     void outputAlignment (BTString& o, RepeatMappingPosition* repeatInfo, long long int* oppoLocation, bool& primaryAlignment) {
+
         BTString* outputChromosome;
         long long int* outputLocation;
 
