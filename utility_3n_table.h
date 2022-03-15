@@ -22,6 +22,7 @@
 
 #include <mutex>
 #include <queue>
+#include <algorithm>
 
 using namespace std;
 
