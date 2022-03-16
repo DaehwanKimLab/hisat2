@@ -325,6 +325,7 @@ struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's in
 int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
 bool uniqueOutputOnly; // only output the unique alignment result.
 int nMappingCycle; // =1 for standard HISAT2, =4 for HISAT-3N, =4 for (HISAT-3N and hs3N_convertedFrom == hs3N_convertedToComplement)
+bool directional3NMapping;
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -572,6 +573,7 @@ static void resetOptions() {
     threeN_indexTags[0] = ".3n.";
     threeN_indexTags[1] = ".3n.";
     nMappingCycle = 1;
+    directional3NMapping = false;
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -802,6 +804,7 @@ static struct option long_options[] = {
     {(char*)"repeat-limit",    required_argument,  0,        ARG_REPEAT_LIMIT},
     {(char*)"unique-only",     no_argument,        0,        ARG_UNIQUE_ONLY},
     {(char*)"3N",              no_argument,        0,        ARG_3N},
+    {(char*)"directional-mapping",              no_argument,        0,        ARG_DIRECTIONAL},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -925,6 +928,7 @@ static void printUsage(ostream& out) {
         << endl
         << " 3N-Alignment:" << endl
         << "  --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (C,T)" << endl
+        << "  --directional-mapping       make directional mapping, please use this option only if your reads are prepared with a strand specific library (off)" << endl
         << "  --repeat-limit <int>        maximum number of repeat will be expanded for repeat alignment (1000)" << endl
         << "  --unique-only               only output the reads have unique alignment (off)" << endl
 		<< endl
@@ -1870,6 +1874,10 @@ static void parseOption(int next_option, const char *arg) {
             uniqueOutputOnly = true;
             break;
         }
+        case ARG_DIRECTIONAL: {
+            directional3NMapping = true;
+            break;
+        }
 		default:
 			printUsage(cerr);
 			throw 1;
@@ -1961,7 +1969,7 @@ static void parseOptions(int argc, const char **argv) {
         threeN_indexTags[1] += hs3N_convertedFromComplement;
         threeN_indexTags[1] += hs3N_convertedToComplement;
 
-        if (hs3N_convertedFrom == hs3N_convertedToComplement) {
+        if (hs3N_convertedFrom == hs3N_convertedToComplement || directional3NMapping) {
             nMappingCycle = 2;
         } else {
             nMappingCycle = 4;
@@ -3552,6 +3560,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     gNorc3N = (mappingCycle == threeN_type1conversion_FW || mappingCycle == threeN_type2conversion_FW);
                     gNofw3N = !gNorc3N;
                 }
+
 				retry = false;
 				assert_eq(ps->bufa().color, false);
 				olm.reads++;
