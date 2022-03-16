@@ -20,6 +20,7 @@ The repeat mode can align nucleotide conversion reads more accurately,
 and it is only 10% slower than the standard mode with tiny more memory (repeat mode use about ~10.5GB) usage than the standard mode.
 
 HISAT-3N is developed based on [HISAT2], which is particularly optimized for RNA sequencing technology.
+HISAT-3N supports both strand-specific and non-strand reads.
 HISAT-3N can be used for any base-converted sequencing reads include [BS-seq], [SLAM-seq], [TAB-seq], [oxBS-seq], [TAPS], [scBS-seq], and [scSLAM-seq].
 
 [HISAT2]:https://github.com/DaehwanKimLab/hisat2
@@ -121,6 +122,10 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
   The index for HISAT-3N.  The basename is the name of the index files up to but not including the suffix `.3n.*.*.ht2` / etc.
   For example, you build your index with basename 'genome' by HISAT-3N-build, please enter `-x genome`.
 
+* `--directional-mapping`  
+  Make directional mapping. Please use this option only if your sequencing reads are generated from a strand-specific library. 
+  The directional mapping mode is about 2x faster than the default (non-directional) mapping mode.
+
 * `--repeat-limit <int>`
   You can set up the number of alignment will be checked for each repeat alignment. You may increase the number to let hisat-3n
   output more, if a read has multiple mapping. We suggest the repeat limit number for paired-end reads alignment is no more
@@ -134,8 +139,8 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
     # Single-end slam-seq reads (T to C conversion, RNA) alignment with the standard 3N-index:  
       hisat-3n -x genome -f -U read.fa -S alignment_result.sam --base-change T,C --no-repeat-index
     
-    # Paired-end bisulfite-seq reads (C to T conversion, DNA) alignment with the repeat 3N-index:   
-      hisat-3n -x genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment
+    # Paired-end strand-specific bisulfite-seq read (C to T conversion) alignment with repeat 3N-index:   
+      hisat-3n -x genome -f -1 read_1.fa -2 read_2.fa -S alignment_result.sam --base-change C,T --repeat --no-spliced-alignment --directional-mapping
     
     # Single-end TAPS reads (have C to T conversion， RNA) alignment with the repeat 3N-index:   
       hisat-3n -x genome -q -U read.fq -S alignment_result.sam --base-change C,T --repeat
