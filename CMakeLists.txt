@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(hisat2)
+project(hisat-3n)
 
 # escape preprocessor definition 
 cmake_policy(SET CMP0005 NEW)

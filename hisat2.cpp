@@ -928,7 +928,7 @@ static void printUsage(ostream& out) {
         << endl
         << " 3N-Alignment:" << endl
         << "  --base-change <chr,chr>     the converted nucleotide and converted to nucleotide (C,T)" << endl
-        << "  --directional-mapping       make directional mapping, please use this option if your sample is prepared with strand specific library (off)" << endl
+        << "  --directional-mapping       make directional mapping, please use this option only if your reads are prepared with a strand specific library (off)" << endl
         << "  --repeat-limit <int>        maximum number of repeat will be expanded for repeat alignment (1000)" << endl
         << "  --unique-only               only output the reads have unique alignment (off)" << endl
 		<< endl
