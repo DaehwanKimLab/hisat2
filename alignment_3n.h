@@ -1086,10 +1086,23 @@ public:
         if (paired) {
             for (int i = 0; i < 2; i++) {
                 assert(!readName[i].empty());
-                string flag = (i == 0) ? "77" : "141";
-                o.append(readName[i].toZBuf());
+                uint ReadNameLength = readName[i].length();
+                if (readName[i].length() > 255)
+                {
+                    ReadNameLength = 255;
+                }
+                for (int j = 0; j < ReadNameLength; j++)
+                {
+                    if(isspace(readName[i][j])) {
+                        break;
+                    }
+                    o.append(readName[i][j]);
+                }
                 o.append("\t");
+
+                string flag = (i == 0) ? "77" : "141";
                 o.append(flag.c_str());
+
                 o.append("\t*\t0\t0\t*\t*\t0\t0\t");
                 o.append(readSequence[i].toZBuf());
                 o.append("\t");
@@ -1100,7 +1113,19 @@ public:
             }
         } else {
             assert(!readName[0].empty());
-            o.append(readName[0].toZBuf());
+            string ReadName = "";
+            uint ReadNameLength = readName[0].length();
+            if (readName[0].length() > 255)
+            {
+                ReadNameLength = 255;
+            }
+            for (int j = 0; j < ReadNameLength; j++)
+            {
+                if(isspace(readName[0][j])) {
+                    break;
+                }
+                o.append(readName[0][j]);
+            }
             o.append("\t4\t*\t0\t0\t*\t*\t0\t0\t");
             o.append(readSequence[0].toZBuf());
             o.append("\t");
