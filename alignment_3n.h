@@ -901,21 +901,21 @@ public:
      * return true if two location is concordant.
      * return false, if there are not concordant or too far (>maxPairDistance).
      */
-    static bool isConcordant(long long int &location1, bool &forward1, long long int &location2, bool &forward2);
+    static bool isConcordant(long long int location1, bool &forward1, long long int readLength1, long long int location2, bool &forward2, long long int readLength2);
 
     /**
      * this is the basic function to calculate DNA pair score.
      * if the distance between 2 alignments is more than penaltyFreeDistance_DNA, we reduce the score by the distance/100.
      * if two alignment is concordant we add concordantScoreBounce to make sure to select the concordant pair as best pair.
      */
-    static int calculatePairScore_DNA (long long int &location0, int& AS0, bool& forward0, long long int &location1, int &AS1, bool &forward1, bool& concordant);
+    static int calculatePairScore_DNA (long long int &location0, int& AS0, bool& forward0, long long int readLength0, long long int &location1, int &AS1, bool &forward1, long long int readLength1, bool& concordant);
 
     /**
      * this is the basic function to calculate RNA pair score.
      * if the distance between 2 alignments is more than penaltyFreeDistance_RNA, we reduce the score by the distance/1000.
      * if two alignment is concordant we add concordantScoreBounce to make sure to select the concordant pair as best pair.
      */
-    static int calculatePairScore_RNA (long long int &location0, int& XM0, bool& forward0, long long int &location1, int &XM1, bool &forward1, bool& concordant);
+    static int calculatePairScore_RNA (long long int &location0, int& XM0, bool& forward0, long long int readLength0, long long int &location1, int &XM1, bool &forward1, long long int readLength1, bool& concordant);
 };
 
 /**
