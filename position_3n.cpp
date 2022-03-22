@@ -87,6 +87,7 @@ MappingPosition::MappingPosition (RepeatMappingPosition* repeat0, Alignment* new
  *  both mate and opposite mate position should be same to MappingPosition to return true.
  */
 bool MappingPositions::positionExist (Alignment* newAlignment) {
+    findBadAlignment = false;
     if (positions.empty()) {
         index = 0;
         return false;
@@ -116,7 +117,7 @@ bool MappingPositions::append(Alignment* newAlignment) {
         return false;
     } else {
         int segment = newAlignment->pairSegment;
-        if (!positions.empty() && positions[index] == newAlignment) {
+        if (!positions.empty() && positions[index] == newAlignment && !findBadAlignment) {
             // check if current MappingPosition is same to new Alignment.
             positions[index].segmentExist[segment] = true;
             if (positions[index].badAlignment) {
