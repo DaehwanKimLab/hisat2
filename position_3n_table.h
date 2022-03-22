@@ -277,6 +277,7 @@ public:
             }
         }
         chromosomePos.sort();
+        chromosome.clear();
     }
 
     /**
@@ -398,23 +399,17 @@ public:
         refFile.clear();
         // find the start position in file based on chromosome name.
         streampos startPos = chromosomePos.getChromosomePosInRefFile(targetChromosome);
+        chromosome = targetChromosome;
         refFile.seekg(startPos, ios::beg);
         refCoveredPosition = 2 * loadingBlockSize;
         string line;
-        bool load = false;
+        lastBase = 'X';
+        location = 0;
         while (refFile.good()) {
             getline(refFile, line);
             if (line.front() == '>') { // this line is chromosome name
-                if (load) { // meet next chromosome, return it.
-                    return;
-                }
-                chromosome = getChrName(line);
-                assert(chromosome == targetChromosome);
-                load = true;
-                lastBase = 'X';
-                location = 0;
+                return; // meet next chromosome, return it.
             } else {
-                assert(load);
                 if (line.empty()) { continue; }
                 // change all base to upper case
                 for (int i = 0; i < line.size(); i++) {

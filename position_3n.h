@@ -89,6 +89,7 @@ public:
     int index; // the index number on positions. should always point to the last or current MappingPosition.
     Alignment* oppositeAlignment; // the temporary pointer point to the opposite mate's Alignment. use in append function.
     bool concordantExist; // whether concordant alignment is exist. use for paired-end output statistics.
+    bool findBadAlignment;
 
     void initialize() {
         positions.clear();
@@ -99,6 +100,7 @@ public:
         index = -1;
         oppositeAlignment = NULL;
         concordantExist = false;
+        findBadAlignment = false;
     }
 
     MappingPositions() {
@@ -118,6 +120,7 @@ public:
      */
     bool findPosition (long long int* inputLocations[2], BTString& chromosome, int& pairSegment) {
         oppositeAlignment = NULL;
+        findBadAlignment = false;
         for (int i = 0; i < positions.size(); i++) {
             if (positions[i].locations[1-pairSegment] == NULL ||
                 *(positions[i].locations[1-pairSegment]) == *inputLocations[1-pairSegment]) {
@@ -127,6 +130,12 @@ public:
                 if (*positions[i].locations[pairSegment] == *inputLocations[pairSegment] &&
                     (*positions[i].chromosome == chromosome)) {
                     index = i;
+                    if (positions[i].badAlignment)
+                    {
+                        findBadAlignment = true;
+                        continue;
+                    }
+                    findBadAlignment = false;
                     return positions[i].segmentExist[pairSegment];
                 }
             }

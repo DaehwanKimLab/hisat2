@@ -87,6 +87,7 @@ MappingPosition::MappingPosition (RepeatMappingPosition* repeat0, Alignment* new
  *  both mate and opposite mate position should be same to MappingPosition to return true.
  */
 bool MappingPositions::positionExist (Alignment* newAlignment) {
+    findBadAlignment = false;
     if (positions.empty()) {
         index = 0;
         return false;
@@ -109,14 +110,14 @@ bool MappingPositions::positionExist (Alignment* newAlignment) {
 /**
  * append new Alignment to positions.
  * return true if the new Alignment successfully append.
- * return false if the new Alignment is exist or it's mate is bad algined.
+ * return false if the new Alignment is exist or it's mate is bad aligned.
  */
 bool MappingPositions::append(Alignment* newAlignment) {
     if (positionExist(newAlignment)) { // check if position is exist.
         return false;
     } else {
         int segment = newAlignment->pairSegment;
-        if (!positions.empty() && positions[index] == newAlignment) {
+        if (!positions.empty() && positions[index] == newAlignment && !findBadAlignment) {
             // check if current MappingPosition is same to new Alignment.
             positions[index].segmentExist[segment] = true;
             if (positions[index].badAlignment) {
@@ -159,8 +160,10 @@ void MappingPositions::outputPair(BTString& o) {
             } else {
                 concordant = Alignment::isConcordant(*positions[i].locations[0],
                                                      positions[i].alignments[0]->forward,
+                                                     positions[i].alignments[0]->readSequence.length(),
                                                      *positions[i].locations[1],
-                                                     positions[i].alignments[1]->forward);
+                                                     positions[i].alignments[1]->forward,
+                                                     positions[i].alignments[1]->readSequence.length());
             }
 
             positions[i].alignments[0]->setConcordant(concordant);
@@ -338,17 +341,21 @@ bool MappingPositions::updatePairScore_repeat() {
                     score = Alignment::calculatePairScore_DNA(repeatPosition0->repeatLocation,
                                                    repeatFlag0->AS,
                                                    forward[0],
+                                                   alignments[0]->readSequence.length(),
                                                    repeatPosition1->repeatLocation,
                                                    repeatFlag1->AS,
                                                    forward[1],
+                                                   alignments[1]->readSequence.length(),
                                                    concordant);
                 } else {
                     score = Alignment::calculatePairScore_RNA(repeatPosition0->repeatLocation,
                                                    repeatFlag0->XM,
                                                    forward[0],
+                                                   alignments[0]->readSequence.length(),
                                                    repeatPosition1->repeatLocation,
                                                    repeatFlag1->XM,
                                                    forward[1],
+                                                   alignments[1]->readSequence.length(),
                                                    concordant);
                 }
                 if (score >= bestPairScore) {

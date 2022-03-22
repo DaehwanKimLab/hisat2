@@ -25,12 +25,43 @@
  * return true if two location is concordant.
  * return false, if there are not concordant or too far (>maxPairDistance).
  */
-bool Alignment::isConcordant(long long int &location1, bool &forward1, long long int &location2, bool &forward2) {
-    if (abs(location1-location2) > maxPairDistance) { return false; }
-    if (location1 < location2) {
-        if (forward1 && !forward2) { return true; }
-    } else {
-        if (!forward1 && forward2) { return true; }
+bool Alignment::isConcordant(long long int location1, bool &forward1, long long int readLength1, long long int location2, bool &forward2, long long int readLength2) {
+    if (forward1 == forward2) // same direction
+    {
+        return false;
+    }
+    // adjust the location of the start of the read
+    if (!forward1)
+    {
+        location1 = location1 + readLength1 - 1;
+    }
+    if (!forward2)
+    {
+        location2 = location2 + readLength2 - 1;
+    }
+    // return false if two reads are too far from each other
+    if (abs(location1-location2) > maxPairDistance)
+    {
+        return false;
+    }
+
+    if (location1 == location2)
+    {
+        return true;
+    }
+    else if (location1 < location2)
+    {
+        if (forward1 && !forward2)
+        {
+            return true;
+        }
+    }
+    else
+    {
+        if (!forward1 && forward2)
+        {
+            return true;
+        }
     }
     return false;
 }
@@ -40,13 +71,13 @@ bool Alignment::isConcordant(long long int &location1, bool &forward1, long long
  * if the distance between 2 alignments is more than penaltyFreeDistance_DNA, we reduce the score by the distance/100.
  * if two alignment is concordant we add concordantScoreBounce to make sure to select the concordant pair as best pair.
  */
-int Alignment::calculatePairScore_DNA (long long int &location0, int& AS0, bool& forward0, long long int &location1, int &AS1, bool &forward1, bool& concordant) {
+int Alignment::calculatePairScore_DNA (long long int &location0, int& AS0, bool& forward0, long long int readLength0, long long int &location1, int &AS1, bool &forward1, long long int readLength1, bool& concordant) {
 
     int score = ASPenalty*AS0 + ASPenalty*AS1;
     int distance = abs(location0 - location1);
     if (distance > maxPairDistance) { return numeric_limits<int>::min(); }
     if (distance > penaltyFreeDistance_DNA) { score -= distance/distancePenaltyFraction_DNA; }
-    concordant = isConcordant(location0, forward0, location1, forward1);
+    concordant = isConcordant(location0, forward0, readLength0, location1, forward1, readLength1);
     if (concordant) { score += concordantScoreBounce; }
     return score;
 }
@@ -56,7 +87,7 @@ int Alignment::calculatePairScore_DNA (long long int &location0, int& AS0, bool&
  * if the distance between 2 alignments is more than penaltyFreeDistance_RNA, we reduce the score by the distance/1000.
  * if two alignment is concordant we add concordantScoreBounce to make sure to select the concordant pair as best pair.
  */
-int Alignment::calculatePairScore_RNA (long long int &location0, int& XM0, bool& forward0, long long int &location1, int &XM1, bool &forward1, bool& concordant) {
+int Alignment::calculatePairScore_RNA (long long int &location0, int& XM0, bool& forward0, long long int readLength0, long long int &location1, int &XM1, bool &forward1, long long int readLength1, bool& concordant) {
     // this is the basic function to calculate pair score.
     // if the distance between 2 alignment is more than 100,000, we reduce the score by the distance/1000.
     // if two alignment is concordant we add 500,000 to make sure to select the concordant pair as best pair.
@@ -64,7 +95,7 @@ int Alignment::calculatePairScore_RNA (long long int &location0, int& XM0, bool&
     int distance = abs(location0 - location1);
     if (distance > maxPairDistance) { return numeric_limits<int>::min(); }
     if (distance > penaltyFreeDistance_RNA) { score -= distance/distancePenaltyFraction_RNA; }
-    concordant = isConcordant(location0, forward0, location1, forward1);
+    concordant = isConcordant(location0, forward0, readLength0, location1, forward1, readLength1);
     if (concordant) { score += concordantScoreBounce; }
     return score;
 }
@@ -93,17 +124,21 @@ int Alignment::calculatePairScore(Alignment *inputAlignment, int &nPair) {
             pairScore = calculatePairScore_DNA(location,
                                                AS,
                                                forward,
+                                               readSequence.length(),
                                                inputAlignment->location,
                                                inputAlignment->AS,
                                                inputAlignment->forward,
+                                               inputAlignment->readSequence.length(),
                                                concordant);
         } else {
             pairScore = calculatePairScore_RNA(location,
                                                XM,
                                                forward,
+                                               readSequence.length(),
                                                inputAlignment->location,
                                                inputAlignment->XM,
                                                inputAlignment->forward,
+                                               inputAlignment->readSequence.length(),
                                                concordant);
         }
         setConcordant(concordant);
