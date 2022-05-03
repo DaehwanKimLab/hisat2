@@ -123,6 +123,11 @@ def load_transcript(genome_seq, gtf_file):
             transcript_id = values_dict['transcript_id']
             gene_id = values_dict['gene_id']
 
+            if gene_id not in genes:
+                gene_name = values_dict['gene_name']
+                gene_biotype = ''
+                genes[gene_id] = [list(), gene_biotype, gene_name, chrom, list()]
+
             if transcript_id not in transcripts:
                 transcripts[transcript_id] = [chrom, strand, [[left, right]], gene_id]
                 genes[gene_id][0].append(transcript_id)
