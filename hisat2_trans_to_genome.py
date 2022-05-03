@@ -25,6 +25,9 @@ class Transinfo:
         # offset_lookup_table[tid] = [list of offsets, sorted]
         self.offset_lookup_table = {}
 
+        # transcript-exon mapping table (per gene)
+        self.tmap = {}
+
     def loadfromfile(self, info_fp):
         self.tbl = {}
         self.offset_lookup_table = {}
@@ -83,6 +86,49 @@ class Transinfo:
             self.offset_lookup_table[tid].sort()
 
 
+    def load_tmapfile(self, tmap_fp):
+        self.tmap = {}
+
+        current_tmap = None
+        # parse file
+        for line in tmap_fp:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            if line.startswith('>'):
+                # header
+                line = line[1:].split('\t')
+
+                # stome, chrname, stxname, bit length, number of tx
+                stxname = line[2]
+                bitlength = int(line[3])
+                ntx = int(line[4])
+
+                if stxname not in self.tmap:
+                    self.tmap[stxname] = [stxname, bitlength, ntx, list()]
+                    current_tmap = self.tmap[stxname]
+                else:
+                    print('Duplicated Supertranscript name', stxname)
+                    current_tmap = self.tmap[stxname]
+
+            else:
+                if not current_tmap:
+                    print('Wrong line', line)
+                    continue
+
+                # bitmask, tid
+                fields = line.split('\t')
+
+                bitmask = int(fields[0], 16)
+
+                current_tmap[3].append([bitmask, fields[1]])
+
+
+        # print(self.tmap)
+        return
+
+
     def find_offset_in_lookup_table(self, tid, pos):
         # find a rightmost offset less than or equal to the pos
         offset_list = self.offset_lookup_table[tid]
@@ -129,11 +175,13 @@ class Transinfo:
     def translate_pos_cigar(self, tid, tr_pos, cigar_str):
         new_chr, new_pos, e_idx, trans, offset = self.map_position_internal(tid, tr_pos)
 
+        tid_list = list()
+
         #trans = self.tbl[tid]
         exons = trans[3]
 
         if cigar_str == '*':
-            return new_chr, new_pos, cigar_str
+            return new_chr, new_pos, cigar_str, tid_list
 
         cigars = cigar_re.findall(cigar_str)
         cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
@@ -142,11 +190,15 @@ class Transinfo:
         tr_pos -= offset
         if tr_pos + read_len > trans[2]:
             # wrong transcript
-            return new_chr, new_pos, cigar_str
+            return new_chr, new_pos, cigar_str, tid_list
 
         assert tr_pos + read_len <= trans[2]
 
         tmp_cigar = list()
+
+        # first exon
+        exon_bit_list = list()
+        exon_bit_list.append(e_idx)
 
         r_len = exons[e_idx][1] - (new_pos - exons[e_idx][0])
         for cigar in cigars:
@@ -179,8 +231,43 @@ class Transinfo:
                         e_idx += 1
                         r_len = exons[e_idx][1]
 
+                    if c_op in ['M']:
+                        exon_bit_list.append(e_idx)
+
                 tmp_cigar.append([gap, 'N'])
 
+
+        ##
+        if exon_bit_list[-1] == len(exons):
+            del exon_bit_list[-1]
+
+        gene_id = trans[4]
+        tidmap = self.tmap[gene_id]
+
+        def generate_bitmask(msb, lsb):
+            bmask = 2 ** (msb + 1) - 1
+            cmask = 2 ** (lsb) - 1
+            return bmask & ~cmask
+
+
+        def generate_bitvalue(bitlist):
+            bv = 0
+            for i in bitlist:
+                bv += 2 ** i
+            return bv
+
+        bitmask = generate_bitmask(exon_bit_list[-1], exon_bit_list[0])
+        bitvalue = generate_bitvalue(exon_bit_list)
+
+        # find tid
+        tid_list = list()
+        for t in tidmap[3]:
+            # print('{:x}\t{:x}\t{:x}'.format(t[0], bitmask, bitvalue))
+            if t[0] & bitmask == bitvalue:
+                tid_list.append(t[1])
+
+        # print('{}/{}'.format(len(tid_list), len(tidmap[3])), tid_list)
+        ##
 
         # clean new_cigars
         ni = 0
@@ -205,7 +292,7 @@ class Transinfo:
         for i in range(ni+1):
             new_cigar.append('{}{}'.format(tmp_cigar[i][0], tmp_cigar[i][1]))
 
-        return new_chr, new_pos, ''.join(new_cigar)
+        return new_chr, new_pos, ''.join(new_cigar), tid_list
 
 
 class OutputQueue:
@@ -244,6 +331,19 @@ class OutputQueue:
                 break
 
         return
+
+    def updateTITZ(self, fields, tid_list):
+        if len(tid_list) == 0:
+            return
+
+        fields.append("TI:Z:{}".format(tid_list[0]))
+
+        TO = '|'.join(tid_list[1:])
+
+        if TO:
+            fields.append("TO:Z:{}".format(TO))
+        return
+
 
     def remove_dup(self):
         # not empty
@@ -360,10 +460,11 @@ class OutputQueue:
 
         else:
             count = self.NH
-            #        self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields])
+            #        self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields, tid_list])
 
             for alignment in self.alignments:
                 fields = alignment[6]
+                tid_list = alignment[7]
                 if alignment[0] == alignment[3]:
                     new_pair_chr = '='
                 else:
@@ -380,6 +481,7 @@ class OutputQueue:
 
                 # update NH
                 self.updateNH(fields, count)
+                self.updateTITZ(fields, tid_list)
 
                 assert self.current_rid == '' or self.current_rid == fields[0]
 
@@ -387,7 +489,7 @@ class OutputQueue:
 
     """
     """
-    def add(self, flag, new_rid, new_chr, new_pos, new_cigar, sam_fields, new_pair_chr, new_pair_pos):
+    def add(self, flag, new_rid, new_chr, new_pos, new_cigar, sam_fields, new_pair_chr, new_pair_pos, tran_id_list):
         flag_paired = (flag & 0x1 == 0x1)
         flag_primary = (flag & 0x900 == 0)
 
@@ -401,7 +503,7 @@ class OutputQueue:
 
         assert self.current_rid == '' or self.current_rid == new_rid
 
-        self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields])
+        self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields, tran_id_list])
 
         """
         if new_key in self.alignments:
@@ -422,18 +524,21 @@ class OutputQueue:
 
     """
     """
-    def push(self, flag, new_rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, sam_fields):
+    def push(self, flag, new_rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, sam_fields, tran_id_list):
         if self.current_rid != new_rid:
             self.flush()
             self.current_rid = new_rid
 
-        self.add(flag, new_rid, new_chr, new_pos, new_cigar, sam_fields, new_pair_chr, new_pair_pos)
+        self.add(flag, new_rid, new_chr, new_pos, new_cigar, sam_fields, new_pair_chr, new_pair_pos, tran_id_list)
         return
 
 
-def main(sam_file, transinfo_file):
+def main(sam_file, transinfo_file, tmap_file):
     transinfo_table = Transinfo()
     transinfo_table.loadfromfile(transinfo_file)
+
+    transinfo_table.load_tmapfile(tmap_file)
+
 
     outq = OutputQueue()
 
@@ -489,10 +594,10 @@ def main(sam_file, transinfo_file):
                 if old_pair_chr == "=":
                     old_pair_chr = old_chr
 
-                new_chr, new_pos, new_cigar = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
+                new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
                 new_pair_chr, new_pair_pos = transinfo_table.map_position(old_pair_chr, old_pair_pos)
 
-            outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields)
+            outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields, tid_list)
 
         else:
             # single
@@ -505,12 +610,12 @@ def main(sam_file, transinfo_file):
             old_pos -= 1
             cigar_str = fields[5]
 
-            new_chr, new_pos, new_cigar = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
+            new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
 
             new_pair_chr = '*'
             new_pair_pos = 0
 
-            outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields)
+            outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields, tid_list)
 
             #print(fields[0], new_chr, new_pos + 1, new_cigar)
 
@@ -525,14 +630,19 @@ if __name__ == '__main__':
         description='Convert transcriptome-based positions to the corresponding genomic positions')
 
     parser.add_argument('sam_file',
-            nargs='?',
-            type=FileType('r'),
-            help='input SAM file')
+                        nargs='?',
+                        type=FileType('r'),
+                        help='input SAM file')
 
     parser.add_argument('transinfo_file',
-            nargs='?',
-            type=FileType('r'),
-            help='transcript position file')
+                        nargs='?',
+                        type=FileType('r'),
+                        help='transcript position file')
+
+    parser.add_argument('-t', '--tid-map',
+                        dest='tmap_file',
+                        type=FileType('r'),
+                        help='Transcript Mapping file')
 
     args = parser.parse_args()
 
@@ -540,5 +650,5 @@ if __name__ == '__main__':
         parser.print_help()
         exit(1)
 
-    main(args.sam_file, args.transinfo_file)
+    main(args.sam_file, args.transinfo_file, args.tmap_file)
 

@@ -1593,7 +1593,7 @@ def calculate_read_cost(single_end,
                         index_name += ('_' + index_type)
                 elif aligner == "hisat-gt":
                     os.system("mv %s %s.tmp" % (out_fname, out_fname))
-                    os.system("%s/hisat2_trans_to_genome.py %s.tmp ../../../../data/%s.gt.map > %s" % (aligner_bin_base, out_fname, genome, out_fname))
+                    os.system("%s/hisat2_trans_to_genome.py -t ../../../../data/%s.gt.tmap %s.tmp ../../../../data/%s.gt.map > %s" % (aligner_bin_base, genome, out_fname, genome, out_fname))
 
                 os.system("echo %s %s %f >> runtime" % (str(datetime.now()), aligner, duration))
 

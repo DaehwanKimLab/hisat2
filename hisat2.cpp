@@ -2004,11 +2004,12 @@ static void parseOptions(int argc, const char **argv) {
         penConflictSplice = 0;
         penCanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
         penNoncanIntronLen.init(SIMPLE_FUNC_CONST, 0, 0);
+        useTempSpliceSite = false;
 
         // -k 20
         allHits = false;
         msample = false;
-        khits = 20;
+        khits = 40;
         mhits = 0;
     }
     

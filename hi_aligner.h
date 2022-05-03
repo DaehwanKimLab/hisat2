@@ -2290,7 +2290,7 @@ bool GenomeHit<index_t>::adjustWithALT(
                                sharedVars);
         return true;
     }
-    index_t width = 1 << (gfm.gh()._offRate + 2);
+    index_t width = 1 << (gfm.gh()._offRate + 3);
     EList<pair<index_t, int> >& ssOffs = sharedVars.ssOffs;
     findSSOffs(gfm, altdb, (coord.joinedOff() >= width ? (index_t)(coord.joinedOff() - width) : 0), (index_t)(coord.joinedOff() + width), ssOffs);
     assert_gt(ssOffs.size(), 0);
@@ -5188,6 +5188,7 @@ public:
                     index_t hitoff = genomeHit.refoff() + hit._len - genomeHit.rdoff();
                     index_t hitoff2 = (index_t)coord.off() + hit._len - rdoff;
                     int64_t hitoff_diff = (tpol.no_spliced_alignment() ? 0 : tpol.maxIntronLen());
+                    hitoff_diff = 0;
                     if(abs((int64_t)hitoff - (int64_t)hitoff2) <= hitoff_diff) {
                         overlapped = true;
                         genomeHit._hitcount++;
@@ -6502,6 +6503,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
     // Keep going
     while(dep < len && dep - offset < maxHitLen) {
         int c = seq[len-dep-1];
+        //cerr << "base: " << "ACGT"[c] << " at " << len-dep-1 << " ";
         if(c > 3) {
             rangeTemp.first = rangeTemp.second = 0;
             node_rangeTemp.first = node_rangeTemp.second = 0;
@@ -6526,6 +6528,7 @@ index_t HI_Aligner<index_t, local_index_t>::partialSearch(
                 }
             }
         }
+        //cerr << "is " << "[" << rangeTemp.first << ", " << rangeTemp.second << "]" << endl;
         if(rangeTemp.first >= rangeTemp.second) {
             break;
         }

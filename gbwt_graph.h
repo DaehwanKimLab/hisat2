@@ -398,7 +398,7 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
                     assert_gt(alt.len, 0);
                     range.second = alt.pos;
                 } else if (alt.type == ALT_SPLICESITE) {
-                    assert_lt(alt.left, alt.right);
+                    assert_leq(alt.left, alt.right);
                     range.second = alt.right + 1;
                 } else {
                     assert(alt.exon());
@@ -775,8 +775,11 @@ RefGraph<index_t>::RefGraph(const SString<char>& s,
             const ALT<index_t>& alt = alts[i];
             if(alt.pos >= s.length()) break;
             if(alt.type != ALT_SPLICESITE) continue;
-            if(alt.excluded) continue;
-            assert_lt(alt.left, alt.right);
+            if(alt.excluded) {
+                cerr << "Alt is excluded. Skip" << endl;
+                continue;
+            }
+            assert_leq(alt.left, alt.right);
             edges.expand();
             edges.back().from = alt.left;
             edges.back().to = alt.right + 2;
@@ -1101,8 +1104,11 @@ void RefGraph<index_t>::buildGraph_worker(void* vp) {
             if(alt.pos < curr_pos) continue;
             if(alt.pos >= curr_pos + curr_len) break;
             if(!alt.splicesite()) continue;
-            if(alt.excluded) continue;
-            assert_lt(alt.left, alt.right);
+            if(alt.excluded) {
+                cerr << "Alt is excluded. Skip" << endl;
+                continue;
+            }
+            assert_leq(alt.left, alt.right);
             edges.expand();
             edges.back().from = alt.left - curr_pos;
             edges.back().to = alt.right - curr_pos + 2;
