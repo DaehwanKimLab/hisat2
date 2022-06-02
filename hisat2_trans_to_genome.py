@@ -8,6 +8,9 @@ import bisect
 
 cigar_re = re.compile('\d+\w')
 
+bGeneSAM = False
+bPrintGeneHeader = False
+
 def read_len_cigar(cigars):
     read_len = 0
     for cigar in cigars:
@@ -18,281 +21,503 @@ def read_len_cigar(cigars):
     return read_len
 
 
-class Transinfo:
+def bitmask_to_list(bitmask):
+    bitlist = list()
+
+    i = 0
+    while bitmask > 0:
+        if bitmask & 0x1:
+            bitlist.append(i)
+
+        bitmask = bitmask >> 1
+        i += 1
+
+    return bitlist
+
+def generate_bitmask(msb, lsb):
+    bmask = 2 ** (msb + 1) - 1
+    cmask = 2 ** (lsb) - 1
+    return bmask & ~cmask
+
+
+def generate_bitvalue(bitlist):
+    bv = 0
+    for i in bitlist:
+        bv += 2 ** i
+    return bv
+
+
+class Exon:
+    """
+    """
+
+    def __init__(self, chr_name='', position=0, length=0):
+        self.chr_name = chr_name
+        self.position = position
+        self.length = length
+        return
+
+    def __repr__(self):
+        return "<Exon chr_name: {}, position: {}, length: {}>".format(self.chr_name, self.position, self.length)
+
+
+class SuperTranscript:
+    """
+    """
+
     def __init__(self):
-        # tbl['tid,offset'] = (gene_id, tlen, ..., list of exons)
-        self.tbl = {}
-        # offset_lookup_table[tid] = [list of offsets, sorted]
+        self.stx_name = ''
+        self.chr_name = ''
+        self.gene_name = ''
+
+        self.stome_name = ''
+        self.offset_in_stome = 0
+
+        self.stx_length = 0
+
+        self.gene_length = 0
+
+        self.exons = list()
+        self.exon_lookup_table = list()
+
+        self.transcripts = list()  # bitmask of transcript [exon bitmask, transcript_name, transcript_length]
+        self.tx_bit_len = 0
+        self.tx_bitmask = 0
+
+        return
+
+    def __repr__(self):
+        return "<stome_name: {}, stx_name: {}, chr_name: {}, gene_name: {}, offset_in_stome: {}, stx_length: {}, gene_length: {}>" \
+            .format(self.stome_name, self.stx_name, self.chr_name, self.gene_name, self.offset_in_stome,
+                    self.stx_length, self.gene_length)
+
+    def finish(self):
+        # update gene_length
+        left = self.exons[0].position
+        right = self.exons[-1].position + self.exons[-1].length
+        self.gene_length = right - left
+
+        # build exon_lookup_table
+        sum_exons = 0
+        for e in self.exons:
+            self.exon_lookup_table.append(sum_exons)
+            sum_exons += e.length
+
+        assert len(self.exons) == len(self.exon_lookup_table)
+        assert sum_exons == self.stx_length, [self.stome_name, self.stx_name, sum_exons, self.stx_length]
+
+        return
+
+    def add_exon(self, exon_str):
+        """
+        chr_name:genomic_position:length
+        """
+
+        fields = exon_str.split(':')
+
+        if len(fields) != 3:
+            print('Wrong format:', exon_str, file=sys.stderr)
+            return
+
+        chr_name = fields[0]
+        position = int(fields[1])
+        length = int(fields[2])
+
+        exon = Exon(chr_name, position, length)
+        self.exons.append(exon)
+
+    def set_tx_bit_len(self, tx_bit_len):
+        self.tx_bit_len = tx_bit_len
+        # self.tx_bitmask =
+
+    def find_exon(self, stome_position, stome_cigar_str):
+        """
+        Find exons that match the position with the cigar string
+        return:
+          list of exon index, offset_in_first_exon, cigars
+        """
+
+        offset_in_stx = stome_position - self.offset_in_stome
+
+        i = bisect.bisect_right(self.exon_lookup_table, offset_in_stx)
+        if not i:
+            print("No exon", file=sys.stderr)
+            return None, None, None
+
+        e_i = i - 1
+        e = self.exons[e_i]
+
+        exon_offset_in_stx = self.exon_lookup_table[e_i]
+        offset_in_exon = offset_in_stx - exon_offset_in_stx
+
+        assert offset_in_exon < e.length
+        #
+        # chr_position = e.position + offset_in_exon
+        # gene_position = e.position - self.exons[0].position + offset_in_exon
+        #
+        # print(chr_position, gene_position)
+        # print(e, offset, offset_in_exon)
+        # print(e.position + offset_in_exon)
+
+        #
+        cigars = cigar_re.findall(stome_cigar_str)
+        cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
+        read_len = read_len_cigar(cigars)
+
+        # print(cigars, read_len)
+
+        assert self.stx_length >= offset_in_stx + read_len
+
+        new_cigars = list()
+        exon_list = list()
+
+        # r_len : remains in the exon
+        r_len = e.length - offset_in_exon
+
+        # append first exon
+        exon_list.append(e_i)
+
+        for cigar in cigars:
+            c_len, c_op = cigar
+            c_len = int(c_len)
+
+            if c_op in ['S']:
+                new_cigars.append([c_len, c_op])
+                continue
+
+            while c_len > 0 and e_i < len(self.exons):
+                if c_len <= r_len:
+                    r_len -= c_len
+                    new_cigars.append([c_len, c_op])
+                    break
+                else:
+                    c_len -= r_len
+                    new_cigars.append([r_len, c_op])
+
+                    # get next exon
+
+                    if e_i == len(self.exons) - 1:
+                        gap = c_len
+                        e_i += 1
+                    else:
+                        gap = self.exons[e_i + 1].position - (self.exons[e_i].position + self.exons[e_i].length)
+                        e_i += 1
+                        r_len = self.exons[e_i].length
+
+                    if c_op in ['M']:
+                        exon_list.append(e_i)
+
+                new_cigars.append([gap, 'N'])
+
+        if exon_list[-1] == len(self.exons):
+            del exon_list[-1]
+
+        # clean up
+        tmp_cigars = new_cigars
+        new_cigars = list()
+        ni = 0
+
+        for i in range(1, len(tmp_cigars)):
+            if tmp_cigars[i][0] == 0:
+                pass
+            elif tmp_cigars[i][1] == 'S' and tmp_cigars[ni][1] == 'N':
+                # replace ni to i
+                tmp_cigars[ni] = tmp_cigars[i]
+            elif tmp_cigars[i][1] == 'N' and tmp_cigars[ni][1] == 'S':
+                # goto next
+                pass
+            elif tmp_cigars[ni][1] == tmp_cigars[i][1]:
+                # merge
+                tmp_cigars[ni][0] += tmp_cigars[i][0]
+            else:
+                ni += 1
+                tmp_cigars[ni] = tmp_cigars[i]
+
+        for i in range(ni + 1):
+            new_cigars.append('{}{}'.format(tmp_cigars[i][0], tmp_cigars[i][1]))
+
+        # print(new_cigars, exon_list)
+
+        return exon_list, offset_in_exon, new_cigars
+
+    def find_transcripts(self, exon_index_list, offset_in_exon):
+        """
+        Find compatible transcripts
+        return:
+            list of [offset_in_transcript, transcript name]
+        """
+        transcripts = list()
+
+        # print(self.tx_bit_len)
+        # print(self.transcripts)
+
+        bitmask = generate_bitmask(exon_index_list[-1], exon_index_list[0])
+        bitvalue = generate_bitvalue(exon_index_list)
+
+
+        def generate_bitstr(value, width):
+            bitstr = '{:b}'.format(value)
+            if len(bitstr) < width:
+
+                bitstr = '0'*(width - len(bitstr)) + bitstr
+            return bitstr
+
+        for tx in self.transcripts:
+            # print('   transcript', generate_bitstr(tx[0], self.tx_bit_len))
+            # print('exon bitvalue', generate_bitstr(bitvalue, self.tx_bit_len))
+            # print('       bimask', generate_bitstr(bitmask, self.tx_bit_len))
+
+            if tx[0] & bitmask == bitvalue:
+                bitlist = bitmask_to_list(tx[0])
+                offset = 0
+                for i in bitlist:
+                    if i >= exon_index_list[0]:
+                        break
+
+                    offset += self.exons[i].length
+
+                offset += offset_in_exon
+                transcripts.append([offset, tx[1]])
+
+        return transcripts
+
+
+class MapResult:
+    """
+    mapping result
+        - stome_name, stome_position, ....
+        - chromosome name, position in chromosome, cigar, ....
+        - gene name, position in gene, cigar, ....
+        - list of (transcript name, position in transcript)
+    """
+
+    def __init__(self, stome_name='', stome_position=0, stome_cigar=''):
+        self.stome_name = stome_name
+        self.stome_position = stome_position
+        self.stome_cigar = stome_cigar
+
+        self.chr_name = ''
+        self.position = 0
+        self.cigar = ''
+
+        self.gene_name = ''
+        self.gene_position = 0
+        self.gene_cigar = ''
+
+        # list of [transcript_name, transcript_position] tuple
+        self.transcripts = list()
+
+        return
+
+    def reset(self, stome_name='', stome_position=0, stome_cigar=''):
+        self.stome_name = stome_name
+        self.stome_position = stome_position
+        self.stome_cigar = stome_cigar
+
+        self.chr_name = ''
+        self.position = 0
+        self.cigar = ''
+
+        self.gene_name = ''
+        self.gene_position = 0
+        self.gene_cigar = ''
+
+        # list of [transcript_name, transcript_position] tuple
+        self.transcripts = list()
+
+        return
+
+    def __repr__(self):
+        return "<stome[name: {}, position: {}, cigar: {}], chr[name: {}, position: {}, cigar: {}], gene[name: {}, position: {}, cigar: {}], {}" \
+            .format(self.stome_name, self.stome_position, self.stome_cigar, self.chr_name, self.position, self.cigar,
+                    self.gene_name, self.gene_position, self.gene_cigar, self.transcripts)
+
+
+class SuperTranscriptIndex:
+    """
+    convert supertranscriptome alignment result to Chromosome, Gene, Transcript result
+    """
+
+    def __init__(self):
+        # dict of SuperTranscript. stx_name as key
+        self.supertranscripts = dict()
+
+        # map of offset on SuperTranscriptome(eg, 22_tome, ...)
+        # used in looking up SuperTranscript
         self.offset_lookup_table = {}
+        self.offset_list = {}
 
-        # transcript-exon mapping table (per gene)
-        self.tmap = {}
+        return
 
-    def loadfromfile(self, info_fp):
-        self.tbl = {}
-        self.offset_lookup_table = {}
+    def loadfromfile(self, map_fp, tmap_fp):
 
-        current_trans = None
-        # parse
-        for line in info_fp:
+        current_stx = None
+        for line in map_fp:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
 
             if line.startswith('>'):
-                line = line[1:].split('\t')
+                # New supertranscript start
+                fields = line.split()
 
-                # tid, chr_name, gene_id, offset, tran_gene_len
-                current_tid = line[0]
-                chr_name = line[1]
+                current_stx = SuperTranscript()
 
-                strand = ''
-                if len(line) < 3:
-                    tran_gene_len = 100000000
-                    gene_id = ''
-                    offset = 0
-                else:
-                    gene_id = line[2]
-                    offset = int(line[3])
-                    tran_gene_len = int(line[4])
+                current_stx.stome_name = fields[0][1:]
+                current_stx.stx_name = fields[2]
+                current_stx.chr_name = fields[1]
+                current_stx.gene_name = fields[2]
+                current_stx.offset_in_stome = int(fields[3])
+                current_stx.stx_length = int(fields[4])
 
-                tbl_key = '{},{}'.format(current_tid, offset)
+                stx_name = current_stx.stx_name
 
+                if stx_name in self.supertranscripts:
+                    print('Duplicated supertranscript', line, file=sys.stderr)
+                    current_stx = None
+                    continue
 
-                # add to offset_lookup_table
-                if not current_tid in self.offset_lookup_table:
-                    self.offset_lookup_table[current_tid] = [offset]
-                else:
-                    self.offset_lookup_table[current_tid].append(offset)
-
-                if not tbl_key in self.tbl:
-                    #                   chr_name, strand, len, exons, gene_id
-                    self.tbl[tbl_key] = [chr_name, strand, tran_gene_len, list(), gene_id]
-                    current_trans = self.tbl[tbl_key]
-
-                else:
-                    print('Duplicated tid', tbl_key)
-                    current_trans = self.tbl[tbl_key]
+                self.supertranscripts[stx_name] = current_stx
 
             else:
-                field = line.split('\t')
 
-                for item in field:
-                    chr_name, genomic_position, exon_len = item.split(':')[0:3]
-                    current_trans[3].append([int(genomic_position), int(exon_len)])
+                if not current_stx:
+                    continue
 
-        # sort offset_lookup_table
-        for tid in self.offset_lookup_table:
-            self.offset_lookup_table[tid].sort()
+                fields = line.split('\t')
+                for e in fields:
+                    current_stx.add_exon(e)
 
+        for stx_name, stx in self.supertranscripts.items():
+            if stx.stome_name in self.offset_lookup_table:
+                self.offset_lookup_table[stx.stome_name].append([stx.offset_in_stome, stx])
+            else:
+                self.offset_lookup_table[stx.stome_name] = [[stx.offset_in_stome, stx]]
 
-    def load_tmapfile(self, tmap_fp):
-        self.tmap = {}
+        # sort
+        for stome_name in self.offset_lookup_table:
+            self.offset_lookup_table[stome_name].sort()
+            self.offset_list[stome_name] = [i[0] for i in self.offset_lookup_table[stome_name]]
 
-        current_tmap = None
-        # parse file
+        # load tmap file
+        current_stx = None
         for line in tmap_fp:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
 
             if line.startswith('>'):
-                # header
-                line = line[1:].split('\t')
+                fields = line.split()
 
-                # stome, chrname, stxname, bit length, number of tx
-                stxname = line[2]
-                bitlength = int(line[3])
-                ntx = int(line[4])
+                stome_name = fields[0][1:]
+                chr_name = fields[1]
+                stx_name = fields[2]
+                gene_name = fields[2]
 
-                if stxname not in self.tmap:
-                    self.tmap[stxname] = [stxname, bitlength, ntx, list()]
-                    current_tmap = self.tmap[stxname]
+                tx_bit_len = int(fields[3])
+                num_transcripts = int(fields[4])
+
+                # lookup supertranscripts
+                if stx_name in self.supertranscripts:
+                    current_stx = self.supertranscripts[stx_name]
                 else:
-                    print('Duplicated Supertranscript name', stxname)
-                    current_tmap = self.tmap[stxname]
-
-            else:
-                if not current_tmap:
-                    print('Wrong line', line)
+                    current_stx = None
+                    print('No supertranscript:', stx_name, file=sys.stderr)
                     continue
 
-                # bitmask, tid
+                # current_stx.tx_bit_len = tx_bit_len
+                current_stx.set_tx_bit_len(tx_bit_len)
+
+            else:
+                if not current_stx:
+                    print('Wrong line:', line)
+                    continue
+
+                # bitmask, transcript_id
                 fields = line.split('\t')
-
                 bitmask = int(fields[0], 16)
+                transcript_id = fields[1]
+                bitlist = bitmask_to_list(bitmask)
+                transcript_length = 0
 
-                current_tmap[3].append([bitmask, fields[1]])
+                # msb index
+                assert bitlist[-1] < len(current_stx.exons)
+                for i in bitlist:
+                    transcript_length += current_stx.exons[i].length
 
+                # print(current_stx.exons)
+                # print(fields[0], bitmask_to_list(bitmask))
+                # print(transcript_id, transcript_length)
 
-        # print(self.tmap)
+                current_stx.transcripts.append([bitmask, transcript_id, transcript_length])
+
+        for stx_name, stx in self.supertranscripts.items():
+            stx.finish()
+
         return
 
+    def find_supertranscript(self, stome_name: str, offset: int) -> SuperTranscript:
+        """
+        find supertranscript
 
-    def find_offset_in_lookup_table(self, tid, pos):
-        # find a rightmost offset less than or equal to the pos
-        offset_list = self.offset_lookup_table[tid]
+        """
 
-        i = bisect.bisect_right(offset_list, pos)
+        offset_list = self.offset_list[stome_name]
+
+        i = bisect.bisect_right(offset_list, offset)
         if i:
-            return offset_list[i - 1]
+            return self.offset_lookup_table[stome_name][i - 1][1]
 
-        raise ValueError
+        return None
 
-    def map_position_internal(self, tid, tr_pos):
+    def print(self):
+        print(self.supertranscripts)
 
-        offset = self.find_offset_in_lookup_table(tid, tr_pos)
-        tbl_key = '{},{}'.format(tid, offset)
+    def mapto(self, stome_name, stome_position, stome_cigar, result: MapResult) -> bool:
+        result.reset(stome_name, stome_position, stome_cigar)
 
-        trans = self.tbl[tbl_key]
+        # find supertranscripts
+        stx = self.find_supertranscript(stome_name, stome_position)
+        if not stx:
+            print("Can't fild supertranscript", file=sys.stderr)
+            return False
 
-        tr_pos -= offset
-        new_chr = trans[0]
-        exons = trans[3]
+        # print(stx)
+        # position_in_stome = stome_position - stx.offset_in_stome
 
-        assert len(exons) >= 1
+        exon_index_list, offset_in_exon, new_cigars = stx.find_exon(stome_position, stome_cigar)
+        if not exon_index_list:
+            print("Can't find exon", file=sys.stderr)
+            return False
 
-        e_idx = -1
-        new_pos = 0
+        exon_index = exon_index_list[0]
+        e = stx.exons[exon_index]
+        transcripts = stx.find_transcripts(exon_index_list, offset_in_exon)
 
-        for i, exon in enumerate(exons):
-            # find first exon
-            if tr_pos >= exon[1]:
-                tr_pos -= exon[1]
-            else:
-                new_pos = exon[0] + tr_pos
-                e_idx = i
-                break
+        # print(e, offset_in_exon)
+        new_cigar_str = ''.join(new_cigars)
 
-        assert e_idx >= 0
+        result.chr_name = e.chr_name
+        result.position = e.position + offset_in_exon
+        result.cigar = new_cigar_str
 
-        return new_chr, new_pos, e_idx, trans, offset
+        result.gene_name = stx.gene_name
+        result.gene_position = e.position - stx.exons[0].position + offset_in_exon
+        result.gene_cigar = new_cigar_str
 
-    def map_position(self, tid, tr_pos):
-        new_chr, new_pos, e_idx, _, _ = self.map_position_internal(tid, tr_pos)
-        return new_chr, new_pos
+        for transcript in transcripts:
+            result.transcripts.append(transcript)
 
-    def translate_pos_cigar(self, tid, tr_pos, cigar_str):
-        new_chr, new_pos, e_idx, trans, offset = self.map_position_internal(tid, tr_pos)
+        # print(stx)
+        # print(stx.gene_name, stx.gene_length)
+        # print(transcripts)
 
-        tid_list = list()
+        # gene_position = result.position - stx.offset_in_stome
 
-        #trans = self.tbl[tid]
-        exons = trans[3]
+        # result.gene_name = stx.gene_name
+        # result.gene_position =
 
-        if cigar_str == '*':
-            return new_chr, new_pos, cigar_str, tid_list
-
-        cigars = cigar_re.findall(cigar_str)
-        cigars = [[int(cigars[i][:-1]), cigars[i][-1]] for i in range(len(cigars))]
-
-        read_len = read_len_cigar(cigars)
-        tr_pos -= offset
-        if tr_pos + read_len > trans[2]:
-            # wrong transcript
-            return new_chr, new_pos, cigar_str, tid_list
-
-        assert tr_pos + read_len <= trans[2]
-
-        tmp_cigar = list()
-
-        # first exon
-        exon_bit_list = list()
-        exon_bit_list.append(e_idx)
-
-        r_len = exons[e_idx][1] - (new_pos - exons[e_idx][0])
-        for cigar in cigars:
-            c_len, c_op = cigar
-            c_len = int(c_len)
-
-            if c_op in ['S']:
-                tmp_cigar.append([c_len, c_op])
-                continue
-
-            while c_len > 0 and e_idx < len(exons):
-                if c_len <= r_len:
-                    r_len -= c_len
-                    tmp_cigar.append([c_len, c_op])
-                    break
-                else:
-                    c_len -= r_len
-                    tmp_cigar.append([r_len, c_op])
-                    """
-                    if e_idx == len(exons):
-                        print(tid)
-                    """
-                    if e_idx == len(exons) - 1:
-                        # FIXME: parkch
-                        # wrong mapping (across a transcript)
-                        gap = c_len
-                        e_idx += 1
-                    else:
-                        gap = exons[e_idx + 1][0] - (exons[e_idx][0] + exons[e_idx][1])
-                        e_idx += 1
-                        r_len = exons[e_idx][1]
-
-                    if c_op in ['M']:
-                        exon_bit_list.append(e_idx)
-
-                tmp_cigar.append([gap, 'N'])
-
-
-        ##
-        if exon_bit_list[-1] == len(exons):
-            del exon_bit_list[-1]
-
-        gene_id = trans[4]
-        tidmap = self.tmap[gene_id]
-
-        def generate_bitmask(msb, lsb):
-            bmask = 2 ** (msb + 1) - 1
-            cmask = 2 ** (lsb) - 1
-            return bmask & ~cmask
-
-
-        def generate_bitvalue(bitlist):
-            bv = 0
-            for i in bitlist:
-                bv += 2 ** i
-            return bv
-
-        bitmask = generate_bitmask(exon_bit_list[-1], exon_bit_list[0])
-        bitvalue = generate_bitvalue(exon_bit_list)
-
-        # find tid
-        tid_list = list()
-        for t in tidmap[3]:
-            # print('{:x}\t{:x}\t{:x}'.format(t[0], bitmask, bitvalue))
-            if t[0] & bitmask == bitvalue:
-                tid_list.append(t[1])
-
-        # print('{}/{}'.format(len(tid_list), len(tidmap[3])), tid_list)
-        ##
-
-        # clean new_cigars
-        ni = 0
-
-        for i in range(1, len(tmp_cigar)):
-            if tmp_cigar[i][0] == 0:
-                pass
-            elif tmp_cigar[i][1] == 'S' and tmp_cigar[ni][1] == 'N':
-                # replace ni to i
-                tmp_cigar[ni] = tmp_cigar[i]
-            elif tmp_cigar[i][1] == 'N' and tmp_cigar[ni][1] == 'S':
-                # goto next
-                pass
-            elif tmp_cigar[ni][1] == tmp_cigar[i][1]:
-                # merge to ni
-                tmp_cigar[ni][0] += tmp_cigar[i][0]
-            else:
-                ni += 1
-                tmp_cigar[ni] = tmp_cigar[i]
-
-        new_cigar = list()
-        for i in range(ni+1):
-            new_cigar.append('{}{}'.format(tmp_cigar[i][0], tmp_cigar[i][1]))
-
-        return new_chr, new_pos, ''.join(new_cigar), tid_list
+        return True
 
 
 class OutputQueue:
@@ -303,7 +528,7 @@ class OutputQueue:
         # read id
         self.current_rid = ''
         # key = [new_chr, new_pos, new_cigar], value = [count, samline_fields]
-        #self.alignments = {}
+        # self.alignments = {}
         self.alignments = list()
         # single/paired-end
         self.is_paired = False
@@ -314,7 +539,7 @@ class OutputQueue:
 
     def reset(self):
         self.current_rid = ''
-        #self.alignments = {}
+        # self.alignments = {}
         self.alignments = list()
         self.is_paired = False
         self.NH = 0
@@ -324,6 +549,7 @@ class OutputQueue:
 
     """
     """
+
     def updateNH(self, fields, count):
         for i, tag in enumerate(fields):
             if isinstance(tag, str) and tag.startswith("NH:i:"):
@@ -332,25 +558,23 @@ class OutputQueue:
 
         return
 
-    def updateTITZ(self, fields, tid_list):
+    def updateTITO(self, fields, tid_list):
         if len(tid_list) == 0:
             return
 
-        fields.append("TI:Z:{}".format(tid_list[0]))
+        fields.append("TI:Z:{}-{}".format(tid_list[0][0], tid_list[0][1] + 1))
 
-        TO = '|'.join(tid_list[1:])
+        TO = '|'.join(['{}-{}'.format(t[0], t[1] + 1) for t in tid_list[1:]])
 
         if TO:
             fields.append("TO:Z:{}".format(TO))
         return
 
-
     def remove_dup(self):
         # not empty
         assert self.alignments
 
-        #self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields])
-
+        # self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields])
 
         flag = self.alignments[0][5]
 
@@ -358,14 +582,14 @@ class OutputQueue:
             # paired-end
             tmp_alignments = self.alignments
 
-            #self.alignments = list()
+            # self.alignments = list()
 
             '''
             if len(tmp_alignments) % 2 > 0:
                 print(tmp_alignments, file=sys.stderr)
             '''
 
-            #assert len(tmp_alignments) % 2 == 0
+            # assert len(tmp_alignments) % 2 == 0
             positions_set = set()
 
             left_alignments_list = list()
@@ -400,7 +624,7 @@ class OutputQueue:
                 else:
                     assert False
 
-            #self.NH = len(self.alignments) // 2
+            # self.NH = len(self.alignments) // 2
             self.left_NH = len(left_alignments_list)
             self.right_NH = len(right_alignments_list)
 
@@ -419,7 +643,7 @@ class OutputQueue:
             positions_set = set()
 
             for alignment in tmp_alignments:
-                key = (alignment[0], alignment[1], alignment[2]) # new_chr, new_pos, new_cigar
+                key = (alignment[0], alignment[1], alignment[2])  # new_chr, new_pos, new_cigar
                 if key not in positions_set:
                     positions_set.add(key)
                     self.alignments.append(alignment)
@@ -456,7 +680,9 @@ class OutputQueue:
 
                 assert self.current_rid == '' or self.current_rid == fields[0]
 
-                print('\t'.join([fields[0], str(flag), alignment[0], str(alignment[1] + 1), str(mapq), alignment[2], new_pair_chr, str(new_pair_pos + 1), *fields[8:]]), file=self.fp)
+                print('\t'.join(
+                    [fields[0], str(flag), alignment[0], str(alignment[1] + 1), str(mapq), alignment[2], new_pair_chr,
+                     str(new_pair_pos + 1), *fields[8:]]), file=self.fp)
 
         else:
             count = self.NH
@@ -481,14 +707,17 @@ class OutputQueue:
 
                 # update NH
                 self.updateNH(fields, count)
-                self.updateTITZ(fields, tid_list)
+                self.updateTITO(fields, tid_list)
 
                 assert self.current_rid == '' or self.current_rid == fields[0]
 
-                print('\t'.join([fields[0], str(flag), alignment[0], str(alignment[1] + 1), str(mapq), alignment[2], new_pair_chr, str(new_pair_pos + 1), *fields[8:]]), file=self.fp)
+                print('\t'.join(
+                    [fields[0], str(flag), alignment[0], str(alignment[1] + 1), str(mapq), alignment[2], new_pair_chr,
+                     str(new_pair_pos + 1), *fields[8:]]), file=self.fp)
 
     """
     """
+
     def add(self, flag, new_rid, new_chr, new_pos, new_cigar, sam_fields, new_pair_chr, new_pair_pos, tran_id_list):
         flag_paired = (flag & 0x1 == 0x1)
         flag_primary = (flag & 0x900 == 0)
@@ -499,11 +728,12 @@ class OutputQueue:
         else:
             assert self.is_paired == flag_paired
 
-        #new_key = (new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, primary)
+        # new_key = (new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, primary)
 
         assert self.current_rid == '' or self.current_rid == new_rid
 
-        self.alignments.append([new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields, tran_id_list])
+        self.alignments.append(
+            [new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, flag, sam_fields, tran_id_list])
 
         """
         if new_key in self.alignments:
@@ -512,9 +742,9 @@ class OutputQueue:
             self.alignments[new_key] = [1, sam_fields, new_pair_chr, new_pair_pos]
         """
 
+    """
+    """
 
-    """
-    """
     def flush(self):
         if self.alignments:
             self.remove_dup()
@@ -524,6 +754,7 @@ class OutputQueue:
 
     """
     """
+
     def push(self, flag, new_rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, sam_fields, tran_id_list):
         if self.current_rid != new_rid:
             self.flush()
@@ -534,13 +765,31 @@ class OutputQueue:
 
 
 def main(sam_file, transinfo_file, tmap_file):
-    transinfo_table = Transinfo()
-    transinfo_table.loadfromfile(transinfo_file)
-
-    transinfo_table.load_tmapfile(tmap_file)
-
+    stx_index = SuperTranscriptIndex()
+    stx_index.loadfromfile(transinfo_file, tmap_file)
 
     outq = OutputQueue()
+    result = MapResult()
+
+    # pass header parts
+    for line in sam_file:
+        line = line.strip()
+        if not line:
+            continue
+
+        if not line.startswith('@'):
+            break
+
+        print(line)
+
+    if bPrintGeneHeader:
+        # Additional header info
+        for stx_name, stx in stx_index.supertranscripts.items():
+            print('@SQ\tSN:{}\tLN:{}\tAL:'.format(stx_name, stx.stx_length))
+
+        for stx_name, stx in stx_index.supertranscripts.items():
+            for tx in stx.transcripts:
+                print('@SQ\tSN:{}\tLN:{}\tGE:{}'.format(tx[1], tx[2], stx_name))
 
     for line in sam_file:
         line = line.strip()
@@ -594,10 +843,11 @@ def main(sam_file, transinfo_file, tmap_file):
                 if old_pair_chr == "=":
                     old_pair_chr = old_chr
 
-                new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
-                new_pair_chr, new_pair_pos = transinfo_table.map_position(old_pair_chr, old_pair_pos)
 
-            outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields, tid_list)
+                # new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
+                # new_pair_chr, new_pair_pos = transinfo_table.map_position(old_pair_chr, old_pair_pos)
+
+            # outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields, tid_list)
 
         else:
             # single
@@ -610,14 +860,32 @@ def main(sam_file, transinfo_file, tmap_file):
             old_pos -= 1
             cigar_str = fields[5]
 
-            new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
+            stx_index.mapto(old_chr, old_pos, cigar_str, result)
+
+            if bGeneSAM:
+                new_chr = result.gene_name
+                new_pos = result.gene_position
+                new_cigar = result.gene_cigar
+
+            else:
+
+                new_chr = result.chr_name
+                new_pos = result.position
+                new_cigar = result.cigar
+
+            tid_list = list()
+
+            for tid in result.transcripts:
+                tid_list.append([tid[1], tid[0]])
+
+            # new_chr, new_pos, new_cigar, tid_list = transinfo_table.translate_pos_cigar(old_chr, old_pos, cigar_str)
 
             new_pair_chr = '*'
             new_pair_pos = 0
 
             outq.push(flag, rid, new_chr, new_pos, new_cigar, new_pair_chr, new_pair_pos, fields, tid_list)
 
-            #print(fields[0], new_chr, new_pos + 1, new_cigar)
+            # print(fields[0], new_chr, new_pos + 1, new_cigar)
 
     # end
     outq.flush()
@@ -644,11 +912,24 @@ if __name__ == '__main__':
                         type=FileType('r'),
                         help='Transcript Mapping file')
 
+    parser.add_argument('--gene',
+                        dest='bGeneSAM',
+                        action='store_true',
+                        default=False,
+                        help='Generate Gene-based SAM file')
+
+    parser.add_argument('--gene-header',
+                        dest='bPrintGeneHeader',
+                        action='store_true',
+                        default=False,
+                        help='Print Gene, Transcript information')
+
     args = parser.parse_args()
 
     if not args.sam_file or not args.transinfo_file:
         parser.print_help()
         exit(1)
 
+    bGeneSAM = args.bGeneSAM
+    bPrintGeneHeader = args.bPrintGeneHeader
     main(args.sam_file, args.transinfo_file, args.tmap_file)
-

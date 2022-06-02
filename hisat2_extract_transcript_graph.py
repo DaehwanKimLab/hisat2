@@ -72,8 +72,38 @@ def write_fasta(fp, ref_id, seq, width=60):
     return
 
 
+class Gene:
+    """
+    """
+    def __init__(self, name = '', chrname = '', biotype = '', transcripts = list()):
+        self.chrname = chrname
+        self.name = name
+        self.biotype = biotype
+        self.transcripts = transcripts
+        self.common_exons = list()
+
+
+    def append_transcript(self, transcript):
+        self.transcripts.append(transcript)
+
+
+class Transcript:
+    """
+    """
+    def __init__(self, chrname='', strand='', exons=list(), gene_id='', transcript_len = 0):
+        self.chrname = chrname
+        self.strand = strand
+        self.exons = exons
+        self.gene_id = gene_id
+        self.transcript_len = transcript_len
+        self.exon_ids = list()
+
+    def append_exon(self, exon):
+        self.exons.append(exon)
+
+
 def load_transcript(genome_seq, gtf_file):
-    genes = defaultdict(list)
+    genes = defaultdict(Gene)
     transcripts = {}
 
     # Parse valid exon lines from the GTF file into a dict by transcript_id
@@ -117,7 +147,8 @@ def load_transcript(genome_seq, gtf_file):
 
             gene_biotype = values_dict['gene_biotype']
             gene_name = values_dict['gene_name']
-            genes[gene_id] = [list(), gene_biotype, gene_name, chrom, list()]
+            gene = Gene(gene_name, chrom, gene_biotype, list())
+            genes[gene_id] = gene
 
         elif feature == 'exon':
             transcript_id = values_dict['transcript_id']
@@ -126,13 +157,13 @@ def load_transcript(genome_seq, gtf_file):
             if gene_id not in genes:
                 gene_name = values_dict['gene_name']
                 gene_biotype = ''
-                genes[gene_id] = [list(), gene_biotype, gene_name, chrom, list()]
+                genes[gene_id] = Gene(gene_name, chrom, gene_biotype, list()) #[list(), gene_biotype, gene_name, chrom, list()]
 
             if transcript_id not in transcripts:
-                transcripts[transcript_id] = [chrom, strand, [[left, right]], gene_id]
-                genes[gene_id][0].append(transcript_id)
+                transcripts[transcript_id] = Transcript(chrom, strand, [[left, right]], gene_id)
+                genes[gene_id].append_transcript(transcript_id)
             else:
-                transcripts[transcript_id][2].append([left, right])
+                transcripts[transcript_id].append_exon([left, right])
         else:
             continue
 
@@ -146,7 +177,8 @@ def read_transcript(genome_seq, gtf_file, min_transcript_len=0):
     min_transcript_len_filtered = 0
 
     # Sort exons and merge where separating introns are <=5 bps
-    for tran, [chrom, strand, exons, gene_id] in transcripts.items():
+    for tran_id, tran in transcripts.items():
+        exons = tran.exons
         exons.sort()
         tmp_exons = [exons[0]]
         for i in range(1, len(exons)):
@@ -155,27 +187,28 @@ def read_transcript(genome_seq, gtf_file, min_transcript_len=0):
                 tmp_exons[-1][1] = exons[i][1]
             else:
                 tmp_exons.append(exons[i])
-        transcripts[tran] = [chrom, strand, tmp_exons, gene_id]
+        transcripts[tran_id].exons = tmp_exons
 
     tmp_transcripts = {}
-    for tran, [chrom, strand, exons, gene_id] in transcripts.items():
+    for tran_id, tran in transcripts.items():
+        exons = tran.exons
         exon_lens = [e[1] - e[0] + 1 for e in exons]
         transcript_len = sum(exon_lens)
         if transcript_len >= min_transcript_len:
-            tmp_transcripts[tran] = [chrom, strand, transcript_len, exons, gene_id, list()]
+            tmp_transcripts[tran_id] = tran
         else:
             min_transcript_len_filtered += 1
 
     transcripts = tmp_transcripts
 
     if bVerbose:
-        num_exons = [len(values[3]) for values in transcripts.values()]
+        num_exons = [len(tran.exons) for tran in transcripts.values()]
         total_exons = sum(num_exons)
         avg_exons = total_exons / len(num_exons)
 
         num_protein_coding = 0
         for gene in genes.values():
-            if gene[1] == 'protein_coding':
+            if gene.biotype == 'protein_coding':
                 num_protein_coding += 1
 
         assert len(num_exons) == len(transcripts)
@@ -292,7 +325,7 @@ def make_gene_snps(snps, genes, exons_list=None):
     chr_gene_list = groupby_gene(genes)
     for chrname, gene_list in chr_gene_list.items():
         for gene_id in gene_list:
-            ex = genes[gene_id][4]
+            ex = genes[gene_id].common_exons
             chr_exons_list[chrname] += [[e[0], e[1], gene_id] for e in ex]
 
     for chrname in chr_exons_list:
@@ -428,12 +461,12 @@ def write_transcripts_ss(fp, gene_id, gene, trans_ids, transcripts, exon_list, o
         if bDebug:
             pprint.pprint(trans)
 
-        old_exons = trans[3]
+        old_exons = trans.exons
 
         assert len(old_exons) >= 1
 
         new_exons = list()
-        for idx in trans[5]:
+        for idx in trans.exon_ids:
             new_start = exon_list[idx][2]
             new_len = exon_list[idx][1] - exon_list[idx][0] + 1
 
@@ -442,7 +475,7 @@ def write_transcripts_ss(fp, gene_id, gene, trans_ids, transcripts, exon_list, o
         for i in range(1, len(new_exons)):
             gap = new_exons[i][0] - new_exons[i - 1][1] - 1
             if gap > 0:
-                ss.add((new_exons[i - 1][1], new_exons[i][0], trans[1]))
+                ss.add((new_exons[i - 1][1], new_exons[i][0], trans.strand))
 
     ss_list = sorted(list(ss))
 
@@ -555,9 +588,10 @@ def write_transcripts_haplotype(trhap_file, chrtome_name, old_chrname, haplotype
 
 
 def groupby_gene(genes):
+    # gene list for each chromosome
     chr_gene_list = dict()
 
-    for k, g in itertools.groupby(genes.items(), key=lambda x : x[1][3]):
+    for k, g in itertools.groupby(genes.items(), key=lambda x : x[1].chrname):
         chr_gene_list[k] = [ x[0] for x in g ]
 
     return chr_gene_list
@@ -584,11 +618,11 @@ def generate_chr_tome(genes, transcripts, gene_ids, snps_list, haplotypes, genom
 
         for g in chrgene:
             gene = genes[g]
-            exons = gene[4]
+            exons = gene.common_exons
             tmp_seq = get_seq(genome_seq[chrname], exons)
             seq += tmp_seq + 'N'
 
-            tran_ids = gene[0]
+            tran_ids = gene.transcripts
 
             # write ss, snp, map
             write_transcripts_ss(trss_file, chrtome_name, gene, tran_ids, transcripts, exons, offset)
@@ -664,16 +698,16 @@ def generate_common_exons(genes, transcripts):
         print('Genes:', len(genes))
         print('Transcripts:', len(transcripts))
 
-    for gene_id, gene_value in genes.items():
+    for gene_id, gene in genes.items():
         if bDebug:
             print(gene_id)
 
         all_exons = []
 
-        for tid in gene_value[0]:
+        for tid in gene.transcripts:
             trans = transcripts[tid]
-            assert gene_id == trans[4]
-            all_exons += trans[3]
+            assert gene_id == trans.gene_id
+            all_exons += trans.exons
 
         unit_exons = make_unique_range(all_exons)
 
@@ -687,7 +721,7 @@ def generate_common_exons(genes, transcripts):
             print(len(tmp_common_exons), tmp_common_exons)
 
 
-        gene_value[4] = tmp_common_exons
+        gene.common_exons = tmp_common_exons
 
     return
 
@@ -732,14 +766,14 @@ def map_new_exons(new_exons, old_exons):
 def translate_to_common_exons(genes, transcripts):
     # print(transcripts)
 
-    for tran_id, tran_item in transcripts.items():
-        old_exons = tran_item[3]
-        gene_id = tran_item[4]
-        new_exons = genes[gene_id][4]
+    for tran_id, tran in transcripts.items():
+        old_exons = tran.exons
+        gene_id = tran.gene_id
+        new_exons = genes[gene_id].common_exons
 
         id_list = map_new_exons(new_exons, old_exons)
         # print(tran_item)
-        tran_item[5] = id_list
+        tran.exon_ids = id_list
         # print(gene_id, old_exons, new_exons, id_list)
 
     return
@@ -753,14 +787,14 @@ def generate_exon_tid_map(genes, transcripts):
     # gene [list(), gene_biotype, gene_name, chrom, list()]
     for gene_id, gene in genes.items():
 
-        tid_map[gene_id] = [len(gene[4]), list()]
+        tid_map[gene_id] = [len(gene.common_exons), list()]
 
-        for tid in gene[0]:
+        for tid in gene.transcripts:
             tran = transcripts[tid]
 
             # tran[5] is a list of exon index
             bitmap = 0
-            for i in tran[5]:
+            for i in tran.exon_ids:
                 bitmap += 2 ** i
 
             # print(len(tran[5]), max(tran[5]), len(gene[4]), bitmap, gene_id, tid)
