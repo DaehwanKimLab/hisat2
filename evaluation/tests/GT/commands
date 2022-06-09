@@ -14,10 +14,11 @@ hisat2-build --ss data/22.gt.ss data/22.gt.fa data/22_gt
 #hisat2 -x 22_gt --transcriptome -f -1 sim_1.fa -2 sim_2.fa -p 5 -S gt.sam
 hisat2 -x 22_gt --transcriptome -f -U sim_1.fa -p 5 -S gt.sam
 
-# map transcript-position to genomic position
-
+# map super transcript position to genomic position
 ./hisat2_trans_to_genome.py -t 22.gt.tmap gt.sam 22.gt.map > out.sam
 
+# map super transcript position to gene position
+./hisat2_trans_to_genome.py --gene -t 22.gt.tmap gt.sam 22.gt.map > out.gene.sam
 
 
 
