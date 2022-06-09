@@ -1,10 +1,7 @@
 # Chromosome 22
 
-# extract transcript graph, ss file (per gene)
+# extract transcript graph, ss file
 ../hisat2_extract_transcript_graph.py -g data/22.gtf -r data/22.fa -o data/22
-
-# extract transcript graph, ss file (per chromosome), *recommend*
-../hisat2_extract_transcript_graph.py -g data/22.gtf -r data/22.fa -o data/22 --chrtome
 
 # build
 hisat2-build --ss data/22.gt.ss data/22.gt.fa data/22_gt
@@ -18,7 +15,7 @@ hisat2 -x 22_gt --transcriptome -f -U sim_1.fa -p 5 -S gt.sam
 ./hisat2_trans_to_genome.py -t 22.gt.tmap gt.sam 22.gt.map > out.sam
 
 # map super transcript position to gene position
-./hisat2_trans_to_genome.py --gene -t 22.gt.tmap gt.sam 22.gt.map > out.gene.sam
+./hisat2_trans_to_genome.py --gene --gene-header -t 22.gt.tmap gt.sam 22.gt.map > out.gene.sam
 
 
 
