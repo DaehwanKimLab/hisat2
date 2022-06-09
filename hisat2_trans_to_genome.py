@@ -791,14 +791,15 @@ def main(sam_file, transinfo_file, tmap_file):
             for tx in stx.transcripts:
                 print('@SQ\tSN:{}\tLN:{}\tGE:{}'.format(tx[1], tx[2], stx_name))
 
+    # rewind
+    sam_file.seek(0)
     for line in sam_file:
         line = line.strip()
         if not line:
             continue
 
         if line.startswith('@'):
-            outq.flush()
-            print(line)
+            # skip header lines
             continue
 
         fields = line.split('\t')
