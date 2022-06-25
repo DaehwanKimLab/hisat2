@@ -324,8 +324,9 @@ vector<ht2_handle_t> repeatHandles; // the 2 repeat handles helps expand the rep
 struct ht2_index_getrefnames_result *refNameMap; // chromosome names and it's index for repeat alignment.
 int repeatLimit; // expand #repeatLimit of qualified position in repeat alignment.
 bool uniqueOutputOnly; // only output the unique alignment result.
-int nMappingCycle; // =1 for standard HISAT2, =4 for HISAT-3N, =4 for (HISAT-3N and hs3N_convertedFrom == hs3N_convertedToComplement)
-bool directional3NMapping;
+int nMappingCycle; // =1 for standard HISAT2, =4 for HISAT-3N
+bool mappingCycles[4]; // this array will indicate which mapping cycle will be run
+int directional3NMapping; // =0 for non-directional mapping, =1 for directional mapping and read1/single-end map to fw reference, =2 for reverse directional mapping and read1/single-end map to rc reference.
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -573,7 +574,10 @@ static void resetOptions() {
     threeN_indexTags[0] = ".3n.";
     threeN_indexTags[1] = ".3n.";
     nMappingCycle = 1;
-    directional3NMapping = false;
+    directional3NMapping = 0;
+    for (int i = 0; i < 4; i++){
+        mappingCycles[i] = false;
+    }
 }
 
 static const char *short_options = "fF:qbzhcu:rv:s:aP:t3:5:w:p:k:M:1:2:I:X:CQ:N:i:L:U:x:S:g:O:D:R:";
@@ -805,6 +809,7 @@ static struct option long_options[] = {
     {(char*)"unique-only",     no_argument,        0,        ARG_UNIQUE_ONLY},
     {(char*)"3N",              no_argument,        0,        ARG_3N},
     {(char*)"directional-mapping",              no_argument,        0,        ARG_DIRECTIONAL},
+    {(char*)"directional-mapping-reverse",              no_argument,        0,        ARG_DIRECTIONAL_REVERSE},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -1875,7 +1880,11 @@ static void parseOption(int next_option, const char *arg) {
             break;
         }
         case ARG_DIRECTIONAL: {
-            directional3NMapping = true;
+            directional3NMapping = 1;
+            break;
+        }
+        case ARG_DIRECTIONAL_REVERSE: {
+            directional3NMapping = 2;
             break;
         }
 		default:
@@ -1969,12 +1978,27 @@ static void parseOptions(int argc, const char **argv) {
         threeN_indexTags[1] += hs3N_convertedFromComplement;
         threeN_indexTags[1] += hs3N_convertedToComplement;
 
-        if (hs3N_convertedFrom == hs3N_convertedToComplement || directional3NMapping) {
-            nMappingCycle = 2;
-        } else {
-            nMappingCycle = 4;
+        nMappingCycle = 4;
+
+        if (hs3N_convertedFrom == hs3N_convertedToComplement || directional3NMapping == 1) {
+            mappingCycles[0] = true;
+            mappingCycles[1] = true;
+        }
+        else if (directional3NMapping == 2) {
+            mappingCycles[2] = true;
+            mappingCycles[3] = true;
+        }
+        else {
+            for (int i = 0; i < 4; i++){
+                mappingCycles[i] = true;
+            }
         }
 	}
+    else
+    {
+        nMappingCycle = 1;
+        mappingCycles[0] = true;
+    }
 
     size_t failStreakTmp = 0;
 	SeedAlignmentPolicy::parseString(
@@ -3388,7 +3412,7 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                                             rp,            // reporting parameters
                                             *bmapq.get(),  // MAPQ calculator
                                             (size_t)tid,   // thread id
-                                            nMappingCycle,
+                                            mappingCycles,
                                             secondary,     // secondary alignments
                                             no_spliced_alignment ? NULL : ssdb,
                                             thread_rids_mindist);
@@ -3560,9 +3584,15 @@ static void multiseedSearchWorker_hisat2(void *vp) {
                     gNorc3N = (mappingCycle == threeN_type1conversion_FW || mappingCycle == threeN_type2conversion_FW);
                     gNofw3N = !gNorc3N;
                 }
-
 				retry = false;
 				assert_eq(ps->bufa().color, false);
+                if (!mappingCycles[mappingCycle])
+                {
+                    mappingCycle++;
+                    continue;
+                }
+
+
 				olm.reads++;
 				bool pair = paired;
 				const size_t rdlen1 = ps->bufa().length();
