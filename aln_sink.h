@@ -1709,7 +1709,7 @@ public:
             const ReportingParams& rp, // Parameters governing reporting
             Mapq& mapq,                // Mapq calculator
             size_t threadId,           // Thread ID
-            int nMappingCycle,         // total mapping cycle
+            bool mappingCycles[4],         // mapping cycles
             bool secondary = false,    // Secondary alignments
             const SpliceSiteDB* ssdb = NULL, // splice sites
             uint64_t threads_rids_mindist = 0) :
@@ -1722,7 +1722,14 @@ public:
                     ssdb,
                     threads_rids_mindist)
     {
-        lastMappingCycle = nMappingCycle - 1;
+        for (int i = 3; i >= 0; i--)
+        {
+            if (mappingCycles[i])
+            {
+                lastMappingCycle = i;
+                break;
+            }
+        }
     }
 
     void finishRead(

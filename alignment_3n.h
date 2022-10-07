@@ -54,7 +54,7 @@ extern vector<ht2_handle_t> repeatHandles;
 extern struct ht2_index_getrefnames_result *refNameMap;
 extern int repeatLimit;
 extern bool uniqueOutputOnly;
-extern bool directional3NMapping;
+extern int directional3NMapping;
 
 using namespace std;
 
@@ -286,8 +286,17 @@ public:
      * if the conversion type 1 is less, the read is mapped to REF-RC (-).
      */
     void makeYZ(char &YZ_string) {
-        if ((conversionCount[0] == 0 && conversionCount[1] == 0) || conversionCount[0] == conversionCount[1] || directional3NMapping)
-        {
+        if (directional3NMapping == 2){
+            if (pairSegment == 0 && forward) {
+                YZ_string = '-';
+            } else if (pairSegment == 0 && !forward) {
+                YZ_string = '+';
+            } else if (pairSegment == 1 && forward) {
+                YZ_string = '+';
+            } else if (pairSegment == 1 && !forward) {
+                YZ_string = '-';
+            }
+        } else if (directional3NMapping == 1 || (conversionCount[0] == 0 && conversionCount[1] == 0) || conversionCount[0] == conversionCount[1]){
             if (pairSegment == 0 && forward) {
                 YZ_string = '+';
             } else if (pairSegment == 0 && !forward) {
