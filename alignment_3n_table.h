@@ -146,6 +146,13 @@ public:
             startPosition = endPosition + 1;
             count++;
         }
+        if (startWith(line, startPosition, "MD")) {
+            MD.loadString(line->substr(startPosition + 5, endPosition - startPosition - 5));
+        } else if (startWith(line, startPosition, "NM")) {
+            NH = stoi(line->substr(startPosition + 5, endPosition - startPosition - 5));
+        } else if (startWith(line, startPosition, "YZ")) {
+            strand = line->at(endPosition-1);
+        }
      }
 
      /**

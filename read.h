@@ -127,7 +127,7 @@ struct Read {
      *
      * The initial threeN_cycle is 0. There are 4 cycle: 0, 1, 2, 3;
      *
-     *             mate 1,             mate2
+     *             mate 1,                              mate2
      * initial:    threeN_type1conversion_FW(0),        threeN_type1conversion_FW(0),
      *             ---------------                             type1->type2       change conversion type
      * 1st cycle:  threeN_type1conversion_FW(0),        threeN_type2conversion_RC(3 = 3-0),
