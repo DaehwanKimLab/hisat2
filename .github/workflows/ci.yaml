@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+
+jobs:
+  build:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Build
+      run:  make -j allall
+
+  build-aarch64:
+    name: Linux aarch64
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Build on Linux ARM64
+      uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: aarch64
+        distro: ubuntu22.04
+        githubToken: ${{ github.token }}
+        dockerRunArgs: |
+          --volume "${PWD}:/hisat2"
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y make g++
+        run: |
+          cd /hisat2
+          make -j allall
