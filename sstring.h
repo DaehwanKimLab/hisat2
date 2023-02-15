@@ -3326,7 +3326,7 @@ public:
 	 */
 	char toChar(size_t idx) const {
 		assert_range((int)this->cs_[idx], 0, 15);
-		return mask2iupac[(int)this->cs_[idx]];
+		return (char)mask2iupac[(int)this->cs_[idx]];
 	}
 
 	/**

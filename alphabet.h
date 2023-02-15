@@ -65,7 +65,7 @@ extern uint8_t dinuc2color[5][5];
 /// corresponding 2-bit nucleotide
 extern uint8_t nuccol2nuc[5][5];
 /// Convert a 4-bit mask into an IUPAC code
-extern char mask2iupac[16];
+extern int mask2iupac[16];
 
 /// Convert an ascii color to an ascii dna char
 extern char col2dna[];
