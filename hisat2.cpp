@@ -327,6 +327,7 @@ bool uniqueOutputOnly; // only output the unique alignment result.
 int nMappingCycle; // =1 for standard HISAT2, =4 for HISAT-3N
 bool mappingCycles[4]; // this array will indicate which mapping cycle will be run
 int directional3NMapping; // =0 for non-directional mapping, =1 for directional mapping and read1/single-end map to fw reference, =2 for reverse directional mapping and read1/single-end map to rc reference.
+int conversionPenalty; // default is 0
 
 #define DMAX std::numeric_limits<double>::max()
 
@@ -575,6 +576,7 @@ static void resetOptions() {
     threeN_indexTags[1] = ".3n.";
     nMappingCycle = 1;
     directional3NMapping = 0;
+    conversionPenalty = 0;
     for (int i = 0; i < 4; i++){
         mappingCycles[i] = false;
     }
@@ -810,6 +812,7 @@ static struct option long_options[] = {
     {(char*)"3N",              no_argument,        0,        ARG_3N},
     {(char*)"directional-mapping",              no_argument,        0,        ARG_DIRECTIONAL},
     {(char*)"directional-mapping-reverse",              no_argument,        0,        ARG_DIRECTIONAL_REVERSE},
+    {(char*)"conversion-penalty",              required_argument,        0,ARG_CONVERSION_PENALTY},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -936,6 +939,7 @@ static void printUsage(ostream& out) {
         << "  --directional-mapping       make directional mapping, please use this option only if your reads are prepared with a strand specific library (off)" << endl
         << "  --repeat-limit <int>        maximum number of repeat will be expanded for repeat alignment (1000)" << endl
         << "  --unique-only               only output the reads have unique alignment (off)" << endl
+        << "  --conversion-penalty        penalty for the conversion in the read (0)" << endl
 		<< endl
         << " Spliced Alignment:" << endl
         << "  --pen-cansplice <int>              penalty for a canonical splice site (0)" << endl
@@ -1869,6 +1873,10 @@ static void parseOption(int next_option, const char *arg) {
         }
         case ARG_3N: {
             threeN = true;
+            break;
+        }
+        case ARG_CONVERSION_PENALTY: {
+            conversionPenalty = parseInt(1, "--conversion-penalty arg must be at least 1", arg);
             break;
         }
         case ARG_REPEAT_LIMIT: {

@@ -55,6 +55,7 @@ extern struct ht2_index_getrefnames_result *refNameMap;
 extern int repeatLimit;
 extern bool uniqueOutputOnly;
 extern int directional3NMapping;
+extern int conversionPenalty;
 
 using namespace std;
 
@@ -409,13 +410,14 @@ public:
             char repeatYZ;
             int repeatYf;
             int repeatZf;
-            if (!constructRepeatMD(refSequence, newMD, newMismatch, repeatYf, repeatZf, repeatYZ)) {
+            int conversion = 0;
+            if (!constructRepeatMD(refSequence, newMD, newMismatch, conversion, repeatYf, repeatZf, repeatYZ)) {
                 continue;
             }
 
             int newXM = XM + newMismatch;
             int newNM = NM + newMismatch;
-            int newAS = AS - penMmcMax * newMismatch;
+            int newAS = AS - penMmcMax * newMismatch - conversionPenalty * conversion;
             if (newAS < MinimumScore)
             {
                 continue;
@@ -438,7 +440,7 @@ public:
      * for each repeat mapping position, construct its MD
      * return true if the mapping result does not have a lot of mismatch, else return false.
      */
-    bool constructRepeatMD(BTString &refSeq, BTString &newMD_String, int &newMismatch, int& repeatYf, int& repeatZf, char &repeatYZ) {
+    bool constructRepeatMD(BTString &refSeq, BTString &newMD_String, int &newMismatch, int &conversion, int& repeatYf, int& repeatZf, char &repeatYZ) {
         char buf[1024];
 
         conversionCount[0] = 0;
@@ -519,11 +521,14 @@ public:
 
         makeYZ(repeatYZ);
         int badConversion = 0;
+        conversion = 0;
         // identify the bad conversion number based on repeatYZ;
         if (repeatYZ == '+') {
+            conversion = conversionCount[0];
             badConversion = conversionCount[1];
         } else {
             badConversion = conversionCount[0];
+            conversion = conversionCount[1];
         }
 
         repeatYf = makeYf(repeatYZ);
@@ -639,11 +644,14 @@ public:
 
         makeYZ(YZ);
         int badConversion = 0;
+        int conversion = 0;
         // identify the bad conversion number based on YZ tag;
         if (YZ == '+') {
+            conversion = conversionCount[0];
             badConversion = conversionCount[1];
         } else {
             badConversion = conversionCount[0];
+            conversion = conversionCount[1];
         }
         Yf = makeYf(YZ);
         Zf = makeZf(YZ);
@@ -658,7 +666,7 @@ public:
 
         NM += newXM;
         XM += newXM;
-        AS = AS - penMmcMax * newXM;
+        AS = AS - penMmcMax * newXM - conversionPenalty * conversion;
         if (AS < MinimumScore)
         {
             return false;
