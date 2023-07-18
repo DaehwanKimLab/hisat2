@@ -20,6 +20,8 @@
 #ifndef PAT_H_
 #define PAT_H_
 
+#include <stdio.h>				 
+#include <zlib.h>				 
 #include <cassert>
 #include <cmath>
 #include <stdexcept>
@@ -884,13 +886,29 @@ protected:
 		if(fb_.isOpen()) fb_.close();
 		while(filecur_ < infiles_.size()) {
 			// Open read
-			FILE *in;
 			if(infiles_[filecur_] == "-") {
-				in = stdin;
-			} else if((in = fopen(infiles_[filecur_].c_str(), "rb")) == NULL) {
+				FILE *in = stdin;
+				fb_.newFile(in);
+				return;
+			}
+			if(endsWith(infiles_[filecur_].c_str(),".gz")){
+				gzFile in;
+				if((in = gzopen(infiles_[filecur_].c_str(), "rb")) == NULL) {
+					if(!errs_[filecur_]) {
+						cerr << "Warning: Could not open read file \"" << infiles_[filecur_].c_str() << "\" for reading; skipping..." << endl;
+						 errs_[filecur_] = true;
+					}
+					filecur_++;
+					continue;
+				}
+				fb_.newFile(in);
+				return;
+			}
+			FILE *in;
+			if((in = fopen(infiles_[filecur_].c_str(), "rb")) == NULL) {
 				if(!errs_[filecur_]) {
 					cerr << "Warning: Could not open read file \"" << infiles_[filecur_].c_str() << "\" for reading; skipping..." << endl;
-					errs_[filecur_] = true;
+					 errs_[filecur_] = true;
 				}
 				filecur_++;
 				continue;
@@ -901,6 +919,13 @@ protected:
 		cerr << "Error: No input read files were valid" << endl;
 		exit(1);
 		return;
+	}
+	
+	bool endsWith(const std::string& str, const std::string& suffix) {
+		if (str.length() < suffix.length()) {
+			return false;
+		}
+		return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
 	}
 	
 	EList<string> infiles_;  // filenames for read files
