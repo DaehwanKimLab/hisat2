@@ -28,6 +28,8 @@
 #include <stdint.h>
 #include <stdexcept>
 #include "assert_helpers.h"
+#include <stdlib.h>
+#include <zlib.h>
 
 /**
  * Simple, fast helper for determining if a character is a newline.
@@ -65,6 +67,11 @@ public:
 		_in = in;
 		assert(_in != NULL);
 	}
+	FileBuf(gzFile in) {
+		init();
+		_zIn = in;
+		assert(_zIn != NULL);
+	}
 
 	FileBuf(std::ifstream *inf) {
 		init();
@@ -78,6 +85,9 @@ public:
 		assert(_ins != NULL);
 	}
 
+	~FileBuf() {
+		close();
+	}
 	/**
 	 * Return true iff there is a stream ready to read.
 	 */
@@ -93,6 +103,8 @@ public:
 			fclose(_in);
 		} else if(_inf != NULL) {
 			_inf->close();
+		} else if(_zIn != NULL) {
+			gzclose(_zIn);				   
 		} else {
 			// can't close _ins
 		}
@@ -102,7 +114,7 @@ public:
 	 * Get the next character of input and advance.
 	 */
 	int get() {
-		assert(_in != NULL || _inf != NULL || _ins != NULL);
+		assert(_in != NULL || _zIn != NULL ||_inf != NULL || _ins != NULL);
 		int c = peek();
 		if(c != -1) {
 			_cur++;
@@ -123,6 +135,17 @@ public:
 	 */
 	void newFile(FILE *in) {
 		_in = in;
+		_zIn = NULL;	  
+		_inf = NULL;
+		_ins = NULL;
+		_cur = BUF_SZ;
+		_buf_sz = BUF_SZ;
+		_done = false;
+	}
+
+	void newFile(gzFile in) {
+		_in = NULL;
+		_zIn = in;
 		_inf = NULL;
 		_ins = NULL;
 		_cur = BUF_SZ;
@@ -131,10 +154,12 @@ public:
 	}
 
 	/**
+		
 	 * Initialize the buffer with a new ifstream.
 	 */
 	void newFile(std::ifstream *__inf) {
 		_in = NULL;
+		_zIn = NULL;	  
 		_inf = __inf;
 		_ins = NULL;
 		_cur = BUF_SZ;
@@ -147,6 +172,7 @@ public:
 	 */
 	void newFile(std::istream *__ins) {
 		_in = NULL;
+		_zIn = NULL;	  
 		_inf = NULL;
 		_ins = __ins;
 		_cur = BUF_SZ;
@@ -165,6 +191,8 @@ public:
 		} else if(_ins != NULL) {
 			_ins->clear();
 			_ins->seekg(0, std::ios::beg);
+		} else if (_zIn != NULL) {
+			gzrewind(_zIn);
 		} else {
 			rewind(_in);
 		}
@@ -179,7 +207,7 @@ public:
 	 * Occasionally we'll need to read in a new buffer's worth of data.
 	 */
 	int peek() {
-		assert(_in != NULL || _inf != NULL || _ins != NULL);
+		assert(_in != NULL || _zIn != NULL || _inf != NULL || _ins != NULL);
 		assert_leq(_cur, _buf_sz);
 		if(_cur == _buf_sz) {
 			if(_done) {
@@ -195,7 +223,9 @@ public:
 				} else if(_ins != NULL) {
 					_ins->read((char*)_buf, BUF_SZ);
 					_buf_sz = _ins->gcount();
-				} else {
+				} else if(_zIn != NULL) {
+					_buf_sz = gzread(_zIn, (void *)_buf, BUF_SZ);
+				} else {						
 					assert(_in != NULL);
 					_buf_sz = fread(_buf, 1, BUF_SZ, _in);
 				}
@@ -430,6 +460,7 @@ private:
 
 	void init() {
 		_in = NULL;
+		_zIn = NULL;	  
 		_inf = NULL;
 		_ins = NULL;
 		_cur = _buf_sz = BUF_SZ;
@@ -440,6 +471,7 @@ private:
 
 	static const size_t BUF_SZ = 256 * 1024;
 	FILE     *_in;
+	gzFile   _zIn;		   
 	std::ifstream *_inf;
 	std::istream  *_ins;
 	size_t    _cur;
@@ -449,6 +481,7 @@ private:
 	size_t    _lastn_cur;
 	char      _lastn_buf[LASTN_BUF_SZ]; // buffer of the last N chars dispensed
 };
+
 
 /**
  * Wrapper for a buffered output stream that writes bitpairs.
