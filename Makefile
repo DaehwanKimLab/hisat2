@@ -184,7 +184,8 @@ ifeq (64,$(BITS))
 endif
 
 SSE_FLAG := -msse2
-ifeq (aarch64, $(ARCH))
+
+ifneq (,$(findstring $(ARCH), aarch64 arm64 s390x powerpc64 powerpc64le ppc64 ppc64le))
 	SSE_FLAG :=
 	BITS_FLAG :=
 endif
