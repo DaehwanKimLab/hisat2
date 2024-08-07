@@ -671,14 +671,12 @@ public:
                      const StrList& refnames,
                      const StrList& repnames,
                      bool quiet,
-                     ALTDB<index_t>* altdb = NULL,
-                     SpliceSiteDB* ssdb = NULL) :
+                     ALTDB<index_t>* altdb = NULL) :
     oq_(oq),
     refnames_(refnames),
     repnames_(repnames),
     quiet_(quiet),
-    altdb_(altdb),
-    spliceSiteDB_(ssdb)
+    altdb_(altdb)
 	{ }
 
 	/**
@@ -954,7 +952,6 @@ protected:
 	bool               quiet_;        // true -> don't print alignment stats at the end
 	ReportingMetrics   met_;          // global repository of reporting metrics
     ALTDB<index_t>*    altdb_;
-    SpliceSiteDB*      spliceSiteDB_; //
 };
 
 /**
@@ -1524,15 +1521,13 @@ public:
                const StrList&   refnames,      // reference names
                const StrList&   repnames,      // repeat names
                bool             quiet,         // don't print alignment summary at end
-               ALTDB<index_t>*  altdb = NULL,
-               SpliceSiteDB*    ssdb  = NULL) :
+               ALTDB<index_t>*  altdb = NULL) :
 		AlnSink<index_t>(
                          oq,
                          refnames,
                          repnames,
                          quiet,
-                         altdb,
-                         ssdb),
+                         altdb),
     samc_(samc)
 	{ }
 	
@@ -1568,17 +1563,11 @@ public:
 			assert(flags1 != NULL);
 			appendMate(o, staln, *rd1, rd2, rdid, rs1, rs2, summ, ssm1, ssm2,
 			           *flags1, prm, mapq, sc);
-            if(rs1 != NULL && rs1->spliced() && this->spliceSiteDB_ != NULL) {
-                this->spliceSiteDB_->addSpliceSite(*rd1, *rs1);
-            }
 		}
 		if(rd2 != NULL && report2) {
 			assert(flags2 != NULL);
 			appendMate(o, staln, *rd2, rd1, rdid, rs2, rs1, summ, ssm2, ssm1,
 			           *flags2, prm, mapq, sc);
-            if(rs2 != NULL && rs2->spliced() && this->spliceSiteDB_ != NULL) {
-                this->spliceSiteDB_->addSpliceSite(*rd2, *rs2);
-            }
 		}
 	}
 

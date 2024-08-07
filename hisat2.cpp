@@ -4119,8 +4119,7 @@ static void driver(
                                                  refnames,     // reference names
                                                  repnames,     // repeat names
                                                  gQuiet,       // don't print alignment summary at end
-                                                 altdb,
-                                                 ssdb);
+                                                 altdb);
 				if(!samNoHead) {
 					bool printHd = true, printSq = true;
 					BTString buf;
