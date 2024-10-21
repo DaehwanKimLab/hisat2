@@ -193,6 +193,13 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 	if($arg eq "-c") {
 		$seq_in_args = 1;
 	}
+	if ($arg eq "--temp-directory") {
+		push @ht2w_args, $ht2_args[$i] ;
+		push @ht2w_args, $ht2_args[$i + 1] ;
+		$ht2_args[$i] = undef ;
+		$ht2_args[$i + 1] = undef ;
+		next ;
+	}
 	for my $rarg ("un-conc", "al-conc", "al-conc-disc", "un", "al") {
 		if($arg =~ /^--${rarg}$/ || $arg =~ /^--${rarg}-gz$/ || $arg =~ /^--${rarg}-bz2$/) {
 			$ht2_args[$i] = undef;
