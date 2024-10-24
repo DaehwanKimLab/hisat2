@@ -2,12 +2,13 @@
 layout: page
 title: Links 
 permalink: /links/
-order: 6
+order: 7
 share: false
 ---
 
 * KimLab - <https://kim-lab.org>
-  * github - <https://github.com/DaehwanKimLab>
+  * lab github - <https://github.com/DaehwanKimLab>
+  * github for HISAT2 - <https://github.com/DaehwanKimLab/hisat2>
 * hisat-genotype - <https://daehwankimlab.github.io/hisat-genotype>
   * github for hisat-genotype - <https://github.com/DaehwanKimLab/hisat-genotype>
 

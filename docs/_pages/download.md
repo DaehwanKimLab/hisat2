@@ -2,7 +2,7 @@
 layout: page
 title: Download
 permalink: /download/
-order: 4
+order: 5
 share: false
 ---
 
@@ -13,14 +13,21 @@ Please cite:
 {:toc}
 
 ## Index
+HISAT2 indexes are hosted on AWS (Amazon Web Services), thanks to the AWS Public Datasets program. Click this [link](https://registry.opendata.aws/jhu-indexes/) for more details.
 
 {% for item in site.data.download-index %}
 ### {{ item.organism }}
   {% for data in item.data %}
 <li>{{ data[0] }}</li>
-<table style="border-collapse: collapse; border: none;">
+<table class="table-noborder">
 {% for genome in data[1] %}
-<tr style="border: none;"><td style="border: none;">{{ genome[0] }}</td><td style="border: none;"><a href="{{ genome[1].url }}">{{ genome[1].url }}</a></td></tr>
+<tr><td>{{ genome[0] }}</td>
+  <td>
+  {% for url in genome[1] %}
+  <a href="{{ url[1] }}">{{ url[1] }}</a><br/>
+  {% endfor %}
+  </td>
+</tr>
 {% endfor %}
 </table>
 {% endfor %}

@@ -57,6 +57,7 @@ my $idx_ext_l     = 'ht2l';
 my $idx_ext_s     = 'ht2'; 
 my $idx_ext       = $idx_ext_s; 
 my $seq_in_args = 0;
+my $skip_read_stat = 0;
 my %signo       = ();
 my @signame     = ();
 
@@ -73,6 +74,8 @@ my @signame     = ();
 
 (-x "$align_prog") ||
 	Fail("Expected hisat2 to be in same directory with hisat2-align-s and hisat2-align-l:\n$script_path\n");
+
+(-x "$read_stat_prog") || ($skip_read_stat = 1);
 
 # Get description of arguments from HISAT so that we can distinguish HISAT
 # args from wrapper args
@@ -183,6 +186,10 @@ for(my $i = 0; $i < scalar(@ht2_args); $i++) {
 		$large_idx = 1;
 		$ht2_args[$i] = undef;
 	}
+	if($arg eq "--skip-read-lengths") {
+		$skip_read_stat = 1;
+		$ht2_args[$i] = undef
+	}
 	if($arg eq "-c") {
 		$seq_in_args = 1;
 	}
@@ -277,7 +284,9 @@ Info("  Binary args:\n[ @ht2_args ]\n");
 # check read lengths
 # if read_files have more than 1 files, use first one,
 my @read_files = (scalar(@unps) > 0) ? @unps : @mate1s;
-if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
+if ((scalar(@read_files) > 0)
+		&& ($seq_in_args == 0)
+		&& ($skip_read_stat == 0)) {
 	Info("Check read length: $read_files[0]\n");
 	my $cmd = "'$read_stat_prog' $read_files[0]";
 	my $read_len_str = "";
@@ -287,7 +296,11 @@ if ((scalar(@read_files) > 0) && ($seq_in_args == 0)) {
 		chomp;
 		next if /^\s*$/;
 		my @ts = split(/ /);
-		$read_len_str = $ts[4];
+		if (scalar(@ts) > 4) {
+			$read_len_str = $ts[4];
+		} else {
+			$read_len_str = "";
+		}
 	}
 	close($fh);
 
