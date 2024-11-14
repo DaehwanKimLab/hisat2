@@ -16,6 +16,7 @@
 #   define USING_GCC_COMPILER
 #   include <cpuid.h>
 #elif defined(_MSC_VER)
+#include <intrin.h>
 // __MSC_VER defined by Microsoft compiler
 #define USING_MSC_COMPILER
 #endif
