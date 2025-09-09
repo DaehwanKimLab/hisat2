@@ -987,8 +987,11 @@ static void printUsage(ostream& out) {
 		//<< "  --shmem            use shared mem for index; many 'hisat2's can share" << endl
 #endif
 		<< endl
-	    << " Other:" << endl
-		<< "  --qc-filter        filter out reads that are bad according to QSEQ filter" << endl
+	    << " Other:" << endl;
+	if(wrapper == "basic-0") {
+    out << "  --temp-directory   set the directory for holding temporary files (/tmp)" << endl;
+  }
+		out << "  --qc-filter        filter out reads that are bad according to QSEQ filter" << endl
 	    << "  --seed <int>       seed for random number generator (0)" << endl
 	    << "  --non-deterministic seed rand. gen. arbitrarily instead of using read attributes" << endl
         << "  --remove-chrname   remove 'chr' from reference names in alignment" << endl

@@ -321,6 +321,8 @@ sub check_file_exist($$$) {
 	my ($unps, $mate1s, $mate2s) = @_;
 	for my $fn (@$unps, @$mate1s, @$mate2s) {
 		if (not -f $fn) {
+      # Skip existence check for stdin indicator
+      next if $fn eq '-';
 			Fail("Read file '%s' doesn't exist\n", $fn);
 			return 1;
 		}
