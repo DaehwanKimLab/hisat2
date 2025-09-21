@@ -370,6 +370,7 @@ sub Error {
 
 sub Fail {
     Error(@_);
+    kill 'TERM', @to_kills;
     die("Exiting now ...\n");    
 }
 
