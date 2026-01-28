@@ -55,7 +55,7 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
-EXTRA_FLAGS += -DPOPCNT_CAPABILITY -std=c++11
+EXTRA_FLAGS += -std=c++11
 INC += -I. -I third_party 
 
 MM_DEF = 
@@ -152,9 +152,10 @@ HISAT2_REPEAT_CPPS_MAIN = $(REPEAT_CPPS) $(BUILD_CPPS) hisat2_repeat_main.cpp
 SEARCH_FRAGMENTS = $(wildcard search_*_phase*.c)
 VERSION = $(shell cat VERSION)
 
+ARCH=$(shell uname -m)
 # Convert BITS=?? to a -m flag
 BITS=32
-ifeq (x86_64,$(shell uname -m))
+ifeq (x86_64,$(ARCH))
 BITS=64
 endif
 # msys will always be 32 bit so look at the cpu arch instead.
@@ -165,14 +166,15 @@ ifneq (,$(findstring AMD64,$(PROCESSOR_ARCHITEW6432)))
 endif
 BITS_FLAG =
 
-ifeq (32,$(BITS))
-	BITS_FLAG = -m32
+ifeq (x86_64,$(ARCH))
+	ifeq (32,$(BITS))
+		BITS_FLAG = -m32
+	endif
+	ifeq (64,$(BITS))
+		BITS_FLAG = -m64
+	endif
+	SSE_FLAG=-msse2
 endif
-
-ifeq (64,$(BITS))
-	BITS_FLAG = -m64
-endif
-SSE_FLAG=-msse2
 
 DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG)
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""
