@@ -55,8 +55,27 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
-EXTRA_FLAGS += -DPOPCNT_CAPABILITY -std=c++11
-INC += -I. -I third_party 
+# Detect target CPU architecture (x86 vs ARM) for SIMD/flag gating.
+ARCH ?= $(shell uname -m)
+ifneq (,$(filter $(ARCH),aarch64 arm64 armv7l armv8l))
+	ARM = 1
+else
+	ARM = 0
+endif
+
+EXTRA_FLAGS += -std=c++11
+# Use -iquote . (not -I.) so the VERSION file does not shadow libc++'s
+# <version> header on case-insensitive filesystems (e.g. macOS). Local headers
+# are all included with quotes, so quoted-include search suffices.
+INC += -iquote .
+ifeq (1,$(ARM))
+	# ARM: NEON via vendored sse2neon.h (quoted include); no x86 cpuid.h, no POPCNT.
+	INC += -iquote third_party
+else
+	# x86: POPCNT path + vendored <cpuid.h>.
+	EXTRA_FLAGS += -DPOPCNT_CAPABILITY
+	INC += -I third_party
+endif
 
 MM_DEF = 
 
@@ -172,7 +191,11 @@ endif
 ifeq (64,$(BITS))
 	BITS_FLAG = -m64
 endif
-SSE_FLAG=-msse2
+ifeq (1,$(ARM))
+	SSE_FLAG =
+else
+	SSE_FLAG = -msse2
+endif
 
 DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG)
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""
