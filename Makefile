@@ -176,6 +176,11 @@ BITS=32
 ifeq (x86_64,$(shell uname -m))
 BITS=64
 endif
+# ARM is 64-bit (aarch64/arm64) and does not take x86 -m32/-m64 flags; the ABI
+# is fixed by the toolchain target, so leave BITS_FLAG empty below.
+ifeq (1,$(ARM))
+BITS=arm
+endif
 # msys will always be 32 bit so look at the cpu arch instead.
 ifneq (,$(findstring AMD64,$(PROCESSOR_ARCHITEW6432)))
 	ifeq (1,$(MINGW))
@@ -443,7 +448,7 @@ hisat2-inspect-s: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(RELEASE_FLAGS) \
 	$(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -452,7 +457,7 @@ hisat2-inspect-l: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(RELEASE_FLAGS) \
 	$(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -461,7 +466,7 @@ hisat2-inspect-s-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(DEBUG_FLAGS) \
 	$(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -470,7 +475,7 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(DEBUG_FLAGS) \
 	$(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
