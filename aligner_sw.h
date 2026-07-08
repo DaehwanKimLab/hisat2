@@ -70,7 +70,11 @@
 #include <iostream>
 #include <limits>
 #include "threading.h"
-#include <emmintrin.h>
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM64)
+#  include "sse2neon.h"
+#else
+#  include <emmintrin.h>
+#endif
 #include "aligner_sw_common.h"
 #include "aligner_sw_nuc.h"
 #include "ds.h"
