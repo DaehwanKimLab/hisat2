@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
 project(hisat2)
 
-# escape preprocessor definition 
+# escape preprocessor definition
 cmake_policy(SET CMP0005 NEW)
+
+# Detect ARM to gate x86-only SIMD flags/defs (mirror of Makefile).
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|armv7l|armv8l)$")
+	set(HISAT2_ARM ON)
+else()
+	set(HISAT2_ARM OFF)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
@@ -18,7 +25,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 set(NCBI_NGS_DIR ${NCBI_NGS_DIR})
 
 # Common Flag
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -g3 -Wall -msse2")
+if(HISAT2_ARM)
+	# ARM: no -m64/-msse2 (invalid on aarch64); SSE2 is translated via sse2neon.h.
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -Wall")
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -g3 -Wall -msse2")
+endif()
 
 # Debug/Release Flag
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
@@ -154,11 +166,16 @@ add_definitions(
 	-D_LARGEFILE_SOURCE
 	-D_FILE_OFFSET_BITS=64
 	-D_GNU_SOURCE
-	-DPOPCNT_CAPABILITY
 	)
 
-
-include_directories(third_party)
+if(HISAT2_ARM)
+	# ARM: vendored sse2neon.h (quoted include); no POPCNT, no x86 <cpuid.h>.
+	include_directories(third_party)
+else()
+	# x86: POPCNT path + vendored <cpuid.h>.
+	add_definitions(-DPOPCNT_CAPABILITY)
+	include_directories(third_party)
+endif()
 
 link_libraries(
 	pthread
@@ -173,7 +190,9 @@ if(BOWTIE_SHARED_MEM)
 	add_definitions(-DBOWTIE_SHARED_MEM)
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR})
+# Use -iquote (not -I) for the source dir so the VERSION file does not shadow
+# libc++'s <version> header on case-insensitive filesystems (e.g. macOS).
+add_compile_options(-iquote ${PROJECT_SOURCE_DIR})
 add_definitions(-DCOMPILER_OPTIONS="${CMAKE_CXX_FLAGS}")
 
 add_library(hisat2lib_static STATIC ${HT2LIB_CPPS} ${SHARED_CPPS})
