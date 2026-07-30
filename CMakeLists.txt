@@ -170,7 +170,7 @@ add_definitions(
 
 if(HISAT2_ARM)
 	# ARM: vendored sse2neon.h (quoted include); no POPCNT, no x86 <cpuid.h>.
-	include_directories(third_party)
+	add_compile_options(-iquote ${PROJECT_SOURCE_DIR}/third_party)
 else()
 	# x86: POPCNT path + vendored <cpuid.h>.
 	add_definitions(-DPOPCNT_CAPABILITY)
