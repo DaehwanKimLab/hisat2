@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+    - uses: actions/checkout@v4
+    - name: build-hisat2
+      run:
+        make -j$(nproc) CXX=${{ matrix.compiler }}
+    - name: test-hisat2
+      run:
+        ./hisat2 -h
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        compiler: [clang++]
+    steps:
+    - uses: actions/checkout@v4
+    - name: build-hisat2
+      run:
+        make -j$(sysctl -n hw.ncpu) CXX=${{ matrix.compiler }} 
+    - name: test-hisat2
+      run:
+        ./hisat2 -h
