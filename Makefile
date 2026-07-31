@@ -55,8 +55,27 @@ ifneq (,$(findstring Darwin,$(shell uname)))
 	MACOS = 1
 endif
 
-EXTRA_FLAGS += -DPOPCNT_CAPABILITY -std=c++11
-INC += -I. -I third_party 
+# Detect target CPU architecture (x86 vs ARM) for SIMD/flag gating.
+ARCH ?= $(shell uname -m)
+ifneq (,$(filter $(ARCH),aarch64 arm64 armv7l armv8l))
+	ARM = 1
+else
+	ARM = 0
+endif
+
+EXTRA_FLAGS += -std=c++11
+# Use -iquote . (not -I.) so the VERSION file does not shadow libc++'s
+# <version> header on case-insensitive filesystems (e.g. macOS). Local headers
+# are all included with quotes, so quoted-include search suffices.
+INC += -iquote .
+ifeq (1,$(ARM))
+	# ARM: NEON via vendored sse2neon.h (quoted include); no x86 cpuid.h, no POPCNT.
+	INC += -iquote third_party
+else
+	# x86: POPCNT path + vendored <cpuid.h>.
+	EXTRA_FLAGS += -DPOPCNT_CAPABILITY
+	INC += -I third_party
+endif
 
 MM_DEF = 
 
@@ -157,6 +176,11 @@ BITS=32
 ifeq (x86_64,$(shell uname -m))
 BITS=64
 endif
+# ARM is 64-bit (aarch64/arm64) and does not take x86 -m32/-m64 flags; the ABI
+# is fixed by the toolchain target, so leave BITS_FLAG empty below.
+ifeq (1,$(ARM))
+BITS=arm
+endif
 # msys will always be 32 bit so look at the cpu arch instead.
 ifneq (,$(findstring AMD64,$(PROCESSOR_ARCHITEW6432)))
 	ifeq (1,$(MINGW))
@@ -172,7 +196,11 @@ endif
 ifeq (64,$(BITS))
 	BITS_FLAG = -m64
 endif
-SSE_FLAG=-msse2
+ifeq (1,$(ARM))
+	SSE_FLAG =
+else
+	SSE_FLAG = -msse2
+endif
 
 DEBUG_FLAGS    = -O0 -g3 $(BITS_FLAG) $(SSE_FLAG)
 DEBUG_DEFS     = -DCOMPILER_OPTIONS="\"$(DEBUG_FLAGS) $(EXTRA_FLAGS)\""
@@ -420,7 +448,7 @@ hisat2-inspect-s: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(RELEASE_FLAGS) \
 	$(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -429,7 +457,7 @@ hisat2-inspect-l: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(RELEASE_FLAGS) \
 	$(RELEASE_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -438,7 +466,7 @@ hisat2-inspect-s-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(DEBUG_FLAGS) \
 	$(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)
@@ -447,7 +475,7 @@ hisat2-inspect-l-debug: hisat2_inspect.cpp $(HEADERS) $(SHARED_CPPS)
 	$(CXX) $(DEBUG_FLAGS) \
 	$(DEBUG_DEFS) $(EXTRA_FLAGS) \
 	$(DEFS) -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DHISAT2_INSPECT_MAIN -Wall \
-	$(INC) -I . \
+	$(INC) \
 	-o $@ $< \
 	$(SHARED_CPPS) \
 	$(LIBS) $(INSPECT_LIBS)

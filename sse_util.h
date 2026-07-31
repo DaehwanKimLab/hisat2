@@ -24,7 +24,11 @@
 #include "ds.h"
 #include "limit.h"
 #include <iostream>
-#include <emmintrin.h>
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM64)
+#  include "sse2neon.h"
+#else
+#  include <emmintrin.h>
+#endif
 
 class EList_m128i {
 public:
