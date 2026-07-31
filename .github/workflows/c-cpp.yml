@@ -22,7 +22,7 @@ jobs:
         make -j$(nproc) CXX=${{ matrix.compiler }}
     - name: test-hisat2
       run:
-        ./hisat2
+        ./hisat2 -h
 
   macos:
     runs-on: macos-latest
@@ -36,4 +36,4 @@ jobs:
         make -j$(sysctl -n hw.ncpu) CXX=${{ matrix.compiler }} 
     - name: test-hisat2
       run:
-        ./hisat2
+        ./hisat2 -h
