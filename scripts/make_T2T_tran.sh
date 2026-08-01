@@ -1,24 +1,14 @@
 #!/bin/sh
 
 #
-# Downloads sequence for the GRCh38 release 84 version of H. sapiens (human) from
-# Ensembl.
-#
-# Note that Ensembl's GRCh38 build has three categories of compressed fasta
-# files:
-#
-# The base files, named ??.fa.gz
-#
-# By default, this script builds and index for just the base files,
-# since alignments to those sequences are the most useful.  To change
-# which categories are built by this script, edit the CHRS_TO_INDEX
-# variable below.
-#
+# Downloads sequence for the T2T-CHM13v2.0 of H. sapiens (human) from NCBI. 
+# ANNOTATION REPORT: 
+# https://www.ncbi.nlm.nih.gov/genome/annotation_euk/Homo_sapiens/GCF_009914755.1-RS_2023_03
+# 
 
-ENSEMBL_RELEASE=110
-ENSEMBL_GRCh38_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
-ENSEMBL_GRCh38_GTF_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gtf/homo_sapiens
-GTF_FILE=Homo_sapiens.GRCh38.${ENSEMBL_RELEASE}.gtf
+GENOME_RELEASE=GCF_009914755.1_T2T-CHM13v2.0_genomic
+GENOME_BASE=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/914/755/GCF_009914755.1_T2T-CHM13v2.0/
+GTF_FILE=$GENOME_RELEASE.gtf
 
 get() {
 	file=$1
@@ -66,24 +56,22 @@ if [ ! -x "$HISAT2_EXON_SCRIPT" ] ; then
 fi
 
 rm -f genome.fa
-F=Homo_sapiens.GRCh38.dna.primary_assembly.fa
+F=$GENOME_RELEASE.fna
 if [ ! -f $F ] ; then
-	get ${ENSEMBL_GRCh38_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
+	get ${GENOME_BASE}/$F.gz || (echo "Error getting $F" && exit 1)
 	gunzip $F.gz || (echo "Error unzipping $F" && exit 1)
-	mv $F genome.fa
+else
+	cp $F genome.fa
 fi
 
+
 if [ ! -f $GTF_FILE ] ; then
-       get ${ENSEMBL_GRCh38_GTF_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
-       gunzip ${GTF_FILE}.gz || (echo "Error unzipping ${GTF_FILE}" && exit 1)
+	get ${GENOME_BASE}/${GTF_FILE}.gz || (echo "Error getting ${GTF_FILE}" && exit 1)
+	gunzip ${GTF_FILE}.gz || (echo "Error unzipping ${GTF_FILE}" && exit 1)
+else
        ${HISAT2_SS_SCRIPT} ${GTF_FILE} > genome.ss
        ${HISAT2_EXON_SCRIPT} ${GTF_FILE} > genome.exon
 fi
 
-CMD="${HISAT2_BUILD_EXE} -p 4 genome.fa --ss genome.ss --exon genome.exon genome_tran"
-echo Running $CMD
-if $CMD ; then
-	echo "genome index built; you may remove fasta files"
-else
-	echo "Index building failed; see error message"
-fi
+${HISAT2_BUILD_EXE} -p 4 genome.fa --ss genome.ss --exon genome.exon genome_tran
+
