@@ -123,7 +123,13 @@ HISAT-3N uses the HISAT2 argument but has some extra arguments. Please check [HI
   For example, you build your index with basename 'genome' by HISAT-3N-build, please enter `-x genome`.
 
 * `--directional-mapping`  
-  Make directional mapping. Please use this option only if your sequencing reads are generated from a strand-specific library. 
+  Make directional mapping. Please use this option only if your sequencing reads are generated from a strand-specific library.
+  This is for the reads that read1 maps to the forward-strand of reference and the read2 maps to the reverse-strand of reference.
+  The directional mapping mode is about 2x faster than the default (non-directional) mapping mode.
+
+* `--directional-mapping-reverse`
+  Make reverse directional mapping. Please use this option only if your sequencing reads are generated from a strand-specific library.
+  This is for the reads that read1 maps to the reverse-strand of reference and the read2 maps to the forward-strand of reference.
   The directional mapping mode is about 2x faster than the default (non-directional) mapping mode.
 
 * `--repeat-limit <int>`
