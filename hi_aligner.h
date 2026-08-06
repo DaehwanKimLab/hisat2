@@ -44,6 +44,10 @@
 #include "tp.h"
 #include "gp.h"
 
+#if defined(_MSC_VER)
+#pragma warning(disable:4146)
+#endif
+
 // Allow longer introns for long anchored reads involving canonical splice sites
 inline uint32_t MaxIntronLen(uint32_t anchor, uint32_t minAnchorLen) {
     uint32_t intronLen = 0;
