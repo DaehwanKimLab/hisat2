@@ -4673,7 +4673,7 @@ void GFM<index_t>::joinToDisk(
 		assert(!l[i]->eof());
 #ifndef NDEBUG
 		int c = l[i]->get();
-		assert_eq('>', c);
+		assert(c == '>' || c == ';');
 		assert(!l[i]->eof());
 		l[i]->reset();
 		assert(!l[i]->eof());
